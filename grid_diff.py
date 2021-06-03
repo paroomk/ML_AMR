@@ -17,6 +17,9 @@ amrex_plt_file1 = '../PeleC/PeleC/Exec/RegTests/PMF/plt1_00020'
 ds1 = yt.load(amrex_plt_file1)
 ds1.print_stats()
 
+print("Variables in plt file: ", ds0.field_list)
+print("Number of AMR levels: ", ds0.max_level)
+
 data0 = ds0.all_data()
 data1 = ds1.all_data()
 
@@ -59,13 +62,48 @@ print(label)
 
 T = np.array(data0['Temp'])
 
-T = T[1:-1,1:-1,1:-1] #Exclude boundary points
+Ti = T[1:-1,1:-1,1:-1] #Exclude boundary points
 
-print(T.shape)
+print(Ti.shape)
 
-s = (T.size,3,3)
+s = (Ti.size,3,3,3)
 x = np.zeros(s)
+xlabel = np.zeros(Ti.size)
 
+for p in range(0,Ti.size):
+    i = p%Ti.shape[0]
+    j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
+    k = p//(Ti.shape[0]*Ti.shape[1])
+    #print(p)
+    #print(i,j,k)
+    x[p,:,:,:] = T[i:i+3,j:j+3,k:k+3]
+    xlabel[p]  = label[i+1,j+1,k+1]
+
+#Test data created
+
+test_index = np.random.choice(np.arange(0,Ti.size),100,replace='False')
+x_test = x[test_index,:,:,:]
+x_testlabel = xlabel[test_index]
+
+
+x_train = np.delete(x, test_index, 0)
+x_trainlabel = np.delete(label, test_index, 0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 print(x.shape)
 
 #x_test = np.random.choice()
