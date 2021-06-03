@@ -2,13 +2,20 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import yt
+matplotlib.use('Qt5Agg')
+import os
+os.putenv('DISPLAY', ':0.0')
 
-amrex_plt_file0 = '../practice-repo/PeleC/PeleC/Exec/RegTests/PMF/plt00020'
+
+amrex_plt_file0 = '../PeleC/PeleC/Exec/RegTests/PMF/plt0_00020'
 ds0 = yt.load(amrex_plt_file0)
+ds0.print_stats()
 
-amrex_plt_file1 = '../practice-repo/PeleC/PeleC/Exec/RegTests/PMF/plt00020'
+amrex_plt_file1 = '../PeleC/PeleC/Exec/RegTests/PMF/plt1_00020'
 ds1 = yt.load(amrex_plt_file1)
+ds1.print_stats()
 
 data0 = ds0.all_data()
 data1 = ds1.all_data()
@@ -36,8 +43,29 @@ print(data0['Temp'].shape)
 print(data1['Temp'].shape)
 
 diff = np.abs(np.array((data0['Temp']- data1['Temp'])))
+label = diff
+label[diff<1.e-10]  = 0
+label[diff>=1.e-10] = 1
 
-plt.figure()
-plt.imshow(diff[0,:,:])
-plt.show()
+print(label)
 
+#print(diff[:,:,47])
+
+#plt.figure()
+#plt.imshow(diff[:,:,50])
+#plt.show()
+
+#Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
+
+T = np.array(data0['Temp'])
+
+T = T[1:-1,1:-1,1:-1] #Exclude boundary points
+
+print(T.shape)
+
+s = (T.size,3,3)
+x = np.zeros(s)
+
+print(x.shape)
+
+#x_test = np.random.choice()
