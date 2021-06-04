@@ -50,6 +50,9 @@ print(data1['Temp'].shape)
 
 diff = np.abs(np.array((data0['Temp']- data1['Temp'])))
 label = diff
+
+#Comment these lines for regression
+
 label[diff<1.e-10]  = 0
 label[diff>=1.e-10] = 1
 
@@ -84,12 +87,22 @@ for p in range(0,Ti.size):
 
 #Test data and training data is created below
 
-x = x.reshape((Ti.size,27))
+##################################
+#Data augmentation using swap axes
+
+xT = np.rot90(x,k=1,axes=(1,2))
+#
+x = np.append(x,xT, axis=0)
+xlabel = np.append(xlabel,xlabel, axis=0)
+
+###################################
+
+x = x.reshape((x.shape[0],27))
 
 test_index = np.random.choice(np.arange(0,Ti.size),100,replace='False')
+
 x_test = x[test_index,:]
 x_testlabel = xlabel[test_index]
-
 
 x_train = np.delete(x, test_index, 0)
 x_trainlabel = np.delete(xlabel, test_index, 0)
@@ -107,15 +120,25 @@ x_test  = (x_test - train_mean)/train_std
     
 print(x.shape)
 
+#Model creation
+
 model = tf.keras.Sequential()
 model.add(tf.keras.layers.Dense(8, input_dim=27, activation='relu'))
+#model.add(tf.keras.layers.Dense(4, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='relu'))
+
 model.summary()
 
 model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-model.fit(x_train, x_trainlabel, batch_size=32, epochs=30)
+
+#Fit on training data
+
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30)
+
+#Test 
+
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('Accuracy: %.2f' % (score[1]*100))
 
-#x_test = np.random.choice()
+print(model.predict(x_test[:10,:]))
