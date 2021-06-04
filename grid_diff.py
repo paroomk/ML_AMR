@@ -7,6 +7,9 @@ import yt
 matplotlib.use('Qt5Agg')
 import os
 os.putenv('DISPLAY', ':0.0')
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
 
 
 amrex_plt_file0 = '../PeleC/PeleC/Exec/RegTests/PMF/plt0_00020'
@@ -79,31 +82,40 @@ for p in range(0,Ti.size):
     x[p,:,:,:] = T[i:i+3,j:j+3,k:k+3]
     xlabel[p]  = label[i+1,j+1,k+1]
 
-#Test data created
+#Test data and training data is created below
+
+x = x.reshape((Ti.size,27))
 
 test_index = np.random.choice(np.arange(0,Ti.size),100,replace='False')
-x_test = x[test_index,:,:,:]
+x_test = x[test_index,:]
 x_testlabel = xlabel[test_index]
 
 
 x_train = np.delete(x, test_index, 0)
-x_trainlabel = np.delete(label, test_index, 0)
+x_trainlabel = np.delete(xlabel, test_index, 0)
 
 
+print(x_train.shape,x_trainlabel.shape)
 
+#Normalize data
 
+train_mean = np.mean(x_train)
+train_std  = np.std(x_train)
 
-
-
-
-
-
-
-
-
-
-
+x_train = (x_train - train_mean)/train_std
+x_test  = (x_test - train_mean)/train_std
     
 print(x.shape)
+
+model = tf.keras.Sequential()
+model.add(tf.keras.layers.Dense(8, input_dim=27, activation='relu'))
+model.add(tf.keras.layers.Dense(1, activation='relu'))
+model.summary()
+
+model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+model.fit(x_train, x_trainlabel, batch_size=32, epochs=30)
+score = model.evaluate(x_test, x_testlabel)
+print('Loss: %.2f' % (score[0]))
+print('Accuracy: %.2f' % (score[1]*100))
 
 #x_test = np.random.choice()
