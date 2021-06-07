@@ -87,7 +87,7 @@ for p in range(0,Ti.size):
 
 #Test data and training data is created below
 
-##################################
+##################################################
 #Data augmentation using swap axes
 
 xT = np.rot90(x,k=1,axes=(1,2))
@@ -95,18 +95,30 @@ xT = np.rot90(x,k=1,axes=(1,2))
 x = np.append(x,xT, axis=0)
 xlabel = np.append(xlabel,xlabel, axis=0)
 
-###################################
+#################################################
 
 x = x.reshape((x.shape[0],27))
+
+##############################################################################
+#Creating validation data set
+
+val_index = np.random.choice(np.arange(0,x.shape[0]),500,replace='False')
+
+x_val = x[val_index, :]
+x_vallabel = xlabel[val_index]
+
+x_train = np.delete(x, val_index, 0)
+x_trainlabel = np.delete(xlabel, val_index, 0)
+
+#############################################################################
 
 test_index = np.random.choice(np.arange(0,Ti.size),100,replace='False')
 
 x_test = x[test_index,:]
 x_testlabel = xlabel[test_index]
 
-x_train = np.delete(x, test_index, 0)
-x_trainlabel = np.delete(xlabel, test_index, 0)
-
+x_train = np.delete(x_train, test_index, 0)
+x_trainlabel = np.delete(x_trainlabel, test_index, 0)
 
 print(x_train.shape,x_trainlabel.shape)
 
@@ -133,7 +145,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30)
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30, validation_data=(x_val,x_vallabel))
 
 #Test 
 
