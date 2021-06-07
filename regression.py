@@ -68,13 +68,15 @@ print(label)
 
 T = np.array(data0['Temp'])
 rho = np.array(data0['density'])
+h = np.array(data0['heatRelease'])
 
-T = np.stack((T,rho),axis=-1)
+
+T = np.stack((T,rho,h),axis=-1)
 
 Ti = T[1:-1,1:-1,1:-1,:] #Exclude boundary points
 print(Ti.shape)
 
-nvar = 2
+nvar = 3
 
 s = (Ti.size//nvar,3,3,3,nvar)
 
@@ -119,7 +121,7 @@ x_trainlabel = np.delete(xlabel, val_index, 0)
 
 #############################################################################
 
-test_index = np.random.choice(np.arange(0,Ti.size),100,replace='False')
+test_index = np.random.choice(np.arange(0,Ti.size//nvar),100,replace='False')
 
 x_test = x[test_index,:]
 x_testlabel = xlabel[test_index]
