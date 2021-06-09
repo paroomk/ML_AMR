@@ -132,6 +132,7 @@ train_std  = np.std(x_train)
 
 x_train = (x_train - train_mean)/train_std
 x_test  = (x_test - train_mean)/train_std
+x_val   = (x_val - train_mean)/train_std
     
 print(x.shape)
 
@@ -148,7 +149,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=10, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30, validation_data=(x_val,x_vallabel))
 
 #Test 
 
