@@ -4,9 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import yt
-matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 import os
-os.putenv('DISPLAY', ':0.0')
+#os.putenv('DISPLAY', ':0.0')
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -61,9 +61,9 @@ print(label)
 #print(diff[:,:,47])
 
 #plt.figure()
-#plt.imshow(diff[:,:,50])
+#plt.imshow(diff[3,:,:])
 #plt.show()
-
+#exit()
 #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
 
 T = np.array(data0['Temp'])
@@ -91,13 +91,16 @@ for p in range(0,Ti.size):
 #Data augmentation using swap axes
 
 xT = np.rot90(x,k=1,axes=(1,2))
-#
+y = x
+ylabel = xlabel
 x = np.append(x,xT, axis=0)
 xlabel = np.append(xlabel,xlabel, axis=0)
 
 #################################################
 
 x = x.reshape((x.shape[0],27))
+y = y.reshape((y.shape[0],27))
+y = (y-np.mean(y))/np.std(y)
 
 ##############################################################################
 #Creating validation data set
@@ -145,7 +148,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=10, validation_data=(x_val,x_vallabel))
 
 #Test 
 
@@ -153,4 +156,11 @@ score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('Accuracy: %.2f' % (score[1]*100))
 
-print(model.predict(x_test[:10,:]))
+y_predict = model.predict(y[:,:])
+err = y_predict[:,0]-ylabel
+#print(err.shape, ylabel.shape)
+err = np.reshape(err, (6,6,126))
+
+plt.figure()
+plt.imshow(err[3,:,:])
+plt.show()
