@@ -56,7 +56,7 @@ label = diff
 #label[diff<1.e-10]  = 0
 #label[diff>=1.e-10] = 1
 
-print(label)
+print(np.max(label))
 
 #print(diff[:,:,47])
 
@@ -67,16 +67,21 @@ print(label)
 #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
 
 T = np.array(data0['Temp'])
-rho = np.array(data0['density'])
-h = np.array(data0['heatRelease'])
+u = np.array(data0['x_velocity'])
+v = np.array(data0['y_velocity'])
+w = np.array(data0['z_velocity'])
 
+T = T/np.max(T) 
+u = u/np.max(u) 
+v = v/np.max(v) 
+T = w/np.max(w) 
 
-T = np.stack((T,rho,h),axis=-1)
+T = np.stack((T,u,v,w),axis=-1)
 
 Ti = T[1:-1,1:-1,1:-1,:] #Exclude boundary points
 print(Ti.shape)
 
-nvar = 3
+nvar = 4
 
 s = (Ti.size//nvar,3,3,3,nvar)
 
@@ -105,9 +110,7 @@ x = np.append(x,xT, axis=0)
 xlabel = np.append(xlabel,xlabel, axis=0)
 
 #################################################
-
 x = x.reshape((x.shape[0],nvar*3**3))
-
 ##############################################################################
 #Creating validation data set
 
@@ -131,26 +134,18 @@ x_trainlabel = np.delete(x_trainlabel, test_index, 0)
 
 print(x_train.shape,x_trainlabel.shape)
 
-#Normalize data
-
-train_mean = np.mean(x_train)
-train_std  = np.std(x_train)
-
-x_train = (x_train - train_mean)/train_std
-x_test  = (x_test - train_mean)/train_std
-    
 print(x.shape)
 
 #Model creation
 
 model = tf.keras.Sequential()
-model.add(tf.keras.layers.Dense(8, input_dim=nvar*3**3, activation='relu'))
-#model.add(tf.keras.layers.Dense(4, activation='relu'))
+model.add(tf.keras.layers.Dense(64, input_dim=nvar*3**3, activation='relu'))
+model.add(tf.keras.layers.Dense(16, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='relu'))
 
 model.summary()
 
-model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+model.compile(optimizer='adam', loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
 
 #Fit on training data
 
@@ -160,6 +155,7 @@ history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30, validation_
 
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
-print('Accuracy: %.2f' % (score[1]*100))
+print('MSE: %.2f' % (score[1]))
 
-print(model.predict(x_test[:10,:]))
+print(model.predict(x_test[:100,:]))
+print(x_testlabel)
