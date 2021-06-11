@@ -53,8 +53,8 @@ label = diff
 
 #Comment these lines for regression
 
-label[diff<1.e-10]  = 0
-label[diff>=1.e-10] = 1
+label[diff<1.e-6]  = 0
+label[diff>=1.e-6] = 1
 
 print(label)
 
@@ -149,7 +149,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_data=(x_val,x_vallabel))
 
 #Test 
 
@@ -162,6 +162,76 @@ err = y_predict[:,0]-ylabel
 #print(err.shape, ylabel.shape)
 err = np.reshape(err, (6,6,126))
 
-plt.figure()
-plt.imshow(err[3,:,:])
-plt.show()
+#plt.figure()
+#plt.imshow(err[3,:,:])
+#plt.show()
+
+
+#Test on data at previous time step
+
+#Prepare data
+
+amrex_plt_file3 = '../PeleC/PeleC/Exec/RegTests/PMF/plt0_00010'
+ds0 = yt.load(amrex_plt_file3)
+ds0.print_stats()
+
+amrex_plt_file4 = '../PeleC/PeleC/Exec/RegTests/PMF/plt1_00010'
+ds1 = yt.load(amrex_plt_file4)
+ds1.print_stats()
+
+data0 = ds0.all_data()
+data1 = ds1.all_data()
+
+ref0 = int(np.product(ds0.ref_factors[0:min_level]))
+ref1 = int(np.product(ds1.ref_factors[0:min_level]))
+
+low0 = ds0.domain_left_edge
+low1 = ds1.domain_left_edge
+dims0 = ds0.domain_dimensions * ref0
+dims1 = ds1.domain_dimensions * ref1
+# without interpolation
+# data = ds.covering_grid(max_level, left_edge=low, dims=dims, num_ghost_zones=1)
+# with interpolation
+data0 = ds0.smoothed_covering_grid(min_level, left_edge=low0, dims=dims0, num_ghost_zones=1)
+data1 = ds1.smoothed_covering_grid(min_level, left_edge=low1, dims=dims1, num_ghost_zones=1)
+
+print(data0['Temp'].shape)
+print(data1['Temp'].shape)
+
+diff = np.abs(np.array((data0['Temp']- data1['Temp'])))
+label = diff
+
+#Comment these lines for regression
+
+label[diff<1.e-6]  = 0
+label[diff>=1.e-6] = 1
+
+#print(label)
+
+T = np.array(data0['Temp'])
+
+Ti = T[1:-1,1:-1,1:-1] #Exclude boundary points
+
+print(Ti.shape)
+
+s = (Ti.size,3,3,3)
+x = np.zeros(s)
+xlabel = np.zeros(Ti.size)
+
+for p in range(0,Ti.size):
+    i = p%Ti.shape[0]
+    j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
+    k = p//(Ti.shape[0]*Ti.shape[1])
+    #print(p)
+    #print(i,j,k)
+    x[p,:,:,:] = T[i:i+3,j:j+3,k:k+3]
+    xlabel[p]  = label[i+1,j+1,k+1]
+
+x = x.reshape((x.shape[0],27))
+x = (x-np.mean(x))/np.std(x)
+
+score = model.evaluate(x, xlabel)
+print('Loss: %.2f' % (score[0]))
+print('Accuracy: %.2f' % (score[1]*100))
+
+
