@@ -4,9 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import yt
-matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 import os
-os.putenv('DISPLAY', ':0.0')
+#os.putenv('DISPLAY', ':0.0')
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -47,9 +47,11 @@ data1 = ds1.smoothed_covering_grid(min_level, left_edge=low1, dims=dims1, num_gh
 
 print(data0['Temp'].shape)
 print(data1['Temp'].shape)
+T = np.array(data0['Temp'])
+T1 = np.array(data1['Temp'])
 
-diff = np.abs(np.array((data0['Temp']- data1['Temp'])))
-label = diff
+diff = np.abs(T1- T)
+label = diff 
 
 #Comment these lines for regression
 
@@ -66,22 +68,26 @@ print(np.max(label))
 
 #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
 
-T = np.array(data0['Temp'])
+
 u = np.array(data0['x_velocity'])
 v = np.array(data0['y_velocity'])
 w = np.array(data0['z_velocity'])
+rho = np.array(data0['density'])
+pr = np.array(data0['pressure'])
 
-T = T/np.max(T) 
-u = u/np.max(u) 
-v = v/np.max(v) 
-T = w/np.max(w) 
+nvar =  1 + 5
 
-T = np.stack((T,u,v,w),axis=-1)
+T = (T-np.mean(T))/np.std(T) 
+u = (u-np.mean(u))/np.std(u) 
+v = (v-np.mean(v))/np.std(v) 
+w = (w-np.mean(w))/np.std(w) 
+rho = (rho-np.mean(rho))/np.std(rho) 
+pr = (pr-np.mean(pr))/np.std(pr) 
+
+T = np.stack((T,u,v,w,rho,pr),axis=-1)
 
 Ti = T[1:-1,1:-1,1:-1,:] #Exclude boundary points
 print(Ti.shape)
-
-nvar = 4
 
 s = (Ti.size//nvar,3,3,3,nvar)
 
@@ -95,8 +101,8 @@ for p in range(0,Ti.size//nvar):
     k = p//(Ti.shape[0]*Ti.shape[1])
     #print(p)
     #print(i,j,k)
-    x[p,:,:,:,0] = T[i:i+3,j:j+3,k:k+3,0]
-    x[p,:,:,:,1] = T[i:i+3,j:j+3,k:k+3,1]
+    for m in range(0,nvar):
+        x[p,:,:,:,m] = T[i:i+3,j:j+3,k:k+3,m]
     xlabel[p]  = label[i+1,j+1,k+1]
 
 #Test data and training data is created below
@@ -139,9 +145,9 @@ print(x.shape)
 #Model creation
 
 model = tf.keras.Sequential()
-model.add(tf.keras.layers.Dense(64, input_dim=nvar*3**3, activation='relu'))
-model.add(tf.keras.layers.Dense(16, activation='relu'))
-model.add(tf.keras.layers.Dense(1, activation='relu'))
+model.add(tf.keras.layers.Dense(16, input_dim=nvar*3**3, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(8, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(1, activation='relu', kernel_regularizer='l1'))
 
 model.summary()
 
@@ -149,7 +155,7 @@ model.compile(optimizer='adam', loss='mse', metrics=[tf.keras.metrics.MeanAbsolu
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=30, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=100, validation_data=(x_val,x_vallabel))
 
 #Test 
 
