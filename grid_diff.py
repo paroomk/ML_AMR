@@ -11,12 +11,12 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-
-amrex_plt_file0 = '../PeleC/PeleC/Exec/RegTests/PMF/plt0_00020'
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+amrex_plt_file0 = path + 'plt85120'
 ds0 = yt.load(amrex_plt_file0)
 ds0.print_stats()
 
-amrex_plt_file1 = '../PeleC/PeleC/Exec/RegTests/PMF/plt1_00020'
+amrex_plt_file1 = path + 'plt1_85120'
 ds1 = yt.load(amrex_plt_file1)
 ds1.print_stats()
 
@@ -149,7 +149,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=5, validation_data=(x_val,x_vallabel))
 
 #Test 
 
@@ -160,12 +160,13 @@ print('Accuracy: %.2f' % (score[1]*100))
 y_predict = model.predict(y[:,:])
 err = y_predict[:,0]-ylabel
 #print(err.shape, ylabel.shape)
-err = np.reshape(err, (6,6,126))
+err = np.reshape(err, (T.shape[0]-2,T.shape[1]-2,T.shape[3]-2))
 
 #plt.figure()
 #plt.imshow(err[3,:,:])
 #plt.show()
 
+exit()
 
 #Test on data at previous time step
 
