@@ -14,108 +14,118 @@ from tensorflow import keras
 
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
 
-amrex_plt_file0 = path + 'plt0_85101'
-ds0 = yt.load(amrex_plt_file0)
-ds0.print_stats()
+def extract_frm_pltfile(path):
+    # Get data all projected to a uniform grid at the coarsest level
+    min_level = 0
+    
+    amrex_plt_file0 = path + 'plt0_85101'
+    ds0 = yt.load(amrex_plt_file0)
+    ds0.print_stats()
+    
+    amrex_plt_file1 = path + 'plt1_85101'
+    ds1 = yt.load(amrex_plt_file1)
+    ds1.print_stats()
+    
+    print("Variables in plt file: ", ds0.field_list)
+    print("Number of AMR levels: ", ds0.max_level)
+    
+    data0 = ds0.all_data()
+    data1 = ds1.all_data()
+    
+    print(data0['Temp'].shape)
+    print(data0['x'])
+    
+    ref0 = int(np.product(ds0.ref_factors[0:min_level]))
+    ref1 = int(np.product(ds1.ref_factors[0:min_level]))
+    
+    low0 = ds0.domain_left_edge
+    low1 = ds1.domain_left_edge
+    dims0 = ds0.domain_dimensions * ref0
+    dims1 = ds1.domain_dimensions * ref1
+    # without interpolation
+    # data = ds.covering_grid(max_level, left_edge=low, dims=dims, num_ghost_zones=1)
+    # with interpolation
+    data0 = ds0.smoothed_covering_grid(min_level, left_edge=low0, dims=dims0, num_ghost_zones=1)
+    data1 = ds1.smoothed_covering_grid(min_level, left_edge=low1, dims=dims1, num_ghost_zones=1)
+    
+    print(data0['Temp'].shape)
+    print(data1['Temp'].shape)
+    T = np.array(data0['Temp'])
+    T1 = np.array(data1['Temp'])
+    
+    diff = np.abs(T1- T)
+    label = diff 
+    
+    #Comment these lines for regression
+    
+    #label[diff<1.e-10]  = 0
+    #label[diff>=1.e-10] = 1
+    
+    print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
+    
+    #print(diff[:,:,47])
+    
+    #plt.figure()
+    #plt.imshow(diff[:,:,50])
+    #plt.show()
+    
+    #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
+    nvar =  4
+    
+    u = np.array(data0['x_velocity'])
+    v = np.array(data0['y_velocity'])
+    w = np.array(data0['z_velocity'])
+    #rho = np.array(data0['density'])
+    #pr = np.array(data0['pressure'])
+    #
+    T = (T-np.mean(T))/np.std(T) 
+    u = (u-np.mean(u))/np.std(u) 
+    v = (v-np.mean(v))/np.std(v) 
+    w = (w-np.mean(w))/np.std(w) 
+    #rho = (rho-np.mean(rho))/np.std(rho) 
+    #pr = (pr-np.mean(pr))/np.std(pr) 
+    #
+    T = np.stack((T,u,v,w),axis=-1)
+    #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
+    
+    l=7 #size of box
+    m = l//2
+    
+    Ti = T[m:-m,m:-m,m:-m,:] #Exclude boundary points
+    print(Ti.shape)
+    
+    s = (Ti.size//nvar,l,l,l,nvar)
+    
+    x = np.zeros(s)
+    print(x.shape)
+    xlabel = np.zeros(Ti.size//nvar)
+    
+    for p in range(0,Ti.size//nvar):
+        i = p%Ti.shape[0]
+        j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
+        k = p//(Ti.shape[0]*Ti.shape[1])
+        #print(p)
+        #print(i,j,k)
+        for m in range(0, nvar):
+            x[p,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
+        xlabel[p]  = label[i+l//2,j+l//2,k+l//2]
+    
+    #Test data and training data is created below
+    
+    #Remove quiscent regions
+    #x = np.delete(x, (np.abs(xlabel)<1.e-3).nonzero(), 0)
+    #xlabel = np.delete(xlabel, (np.abs(xlabel)<1.e-3).nonzero(), 0)
+    #xlabel = (xlabel-np.mean(xlabel))/np.std(xlabel)
+    print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+    
+    return x, xlabel, nvar, l, T
+def extract_frm_downsampledfile(file):
+    ds = np.load(file)
+    print(ds.files)
+    ds_index = ds['indices']
+    #print(ds_index)
+    return ds_index
 
-amrex_plt_file1 = path + 'plt1_85101'
-ds1 = yt.load(amrex_plt_file1)
-ds1.print_stats()
-
-print("Variables in plt file: ", ds0.field_list)
-print("Number of AMR levels: ", ds0.max_level)
-
-data0 = ds0.all_data()
-data1 = ds1.all_data()
-
-print(data0['Temp'].shape)
-print(data0['x'])
-
-# Get data all projected to a uniform grid at the coarsest level
-min_level = 0
-
-ref0 = int(np.product(ds0.ref_factors[0:min_level]))
-ref1 = int(np.product(ds1.ref_factors[0:min_level]))
-
-low0 = ds0.domain_left_edge
-low1 = ds1.domain_left_edge
-dims0 = ds0.domain_dimensions * ref0
-dims1 = ds1.domain_dimensions * ref1
-# without interpolation
-# data = ds.covering_grid(max_level, left_edge=low, dims=dims, num_ghost_zones=1)
-# with interpolation
-data0 = ds0.smoothed_covering_grid(min_level, left_edge=low0, dims=dims0, num_ghost_zones=1)
-data1 = ds1.smoothed_covering_grid(min_level, left_edge=low1, dims=dims1, num_ghost_zones=1)
-
-print(data0['Temp'].shape)
-print(data1['Temp'].shape)
-T = np.array(data0['Temp'])
-T1 = np.array(data1['Temp'])
-
-diff = T1- T
-label = diff 
-
-#Comment these lines for regression
-
-#label[diff<1.e-10]  = 0
-#label[diff>=1.e-10] = 1
-
-print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
-
-#print(diff[:,:,47])
-
-#plt.figure()
-#plt.imshow(diff[:,:,50])
-#plt.show()
-
-#Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
-nvar =  4
-
-u = np.array(data0['x_velocity'])
-v = np.array(data0['y_velocity'])
-w = np.array(data0['z_velocity'])
-#rho = np.array(data0['density'])
-#pr = np.array(data0['pressure'])
-#
-T = (T-np.mean(T))/np.std(T) 
-u = (u-np.mean(u))/np.std(u) 
-v = (v-np.mean(v))/np.std(v) 
-w = (w-np.mean(w))/np.std(w) 
-#rho = (rho-np.mean(rho))/np.std(rho) 
-#pr = (pr-np.mean(pr))/np.std(pr) 
-#
-T = np.stack((T,u,v,w),axis=-1)
-#T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
-
-l=9 #size of box
-m = l//2
-
-Ti = T[m:-m,m:-m,m:-m,:] #Exclude boundary points
-print(Ti.shape)
-
-s = (Ti.size//nvar,l,l,l,nvar)
-
-x = np.zeros(s)
-print(x.shape)
-xlabel = np.zeros(Ti.size//nvar)
-
-for p in range(0,Ti.size//nvar):
-    i = p%Ti.shape[0]
-    j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
-    k = p//(Ti.shape[0]*Ti.shape[1])
-    #print(p)
-    #print(i,j,k)
-    for m in range(0, nvar):
-        x[p,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
-    xlabel[p]  = label[i+l//2,j+l//2,k+l//2]
-
-#Test data and training data is created below
-
-#Remove quiscent regions
-#x = np.delete(x, (np.abs(xlabel)<1.e-3).nonzero(), 0)
-#xlabel = np.delete(xlabel, (np.abs(xlabel)<1.e-3).nonzero(), 0)
-xlabel = (xlabel-np.mean(xlabel))/np.std(xlabel)
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 ##################################################
 #Data augmentation using swap axes
 
@@ -125,7 +135,19 @@ print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)
 #xlabel = np.append(xlabel,xlabel, axis=0)
 
 #################################################
-#x = x.reshape((x.shape[0],nvar*l**3))
+x, xlabel, nvar, l, T = extract_frm_pltfile(path)
+y = x
+ylabel = xlabel
+#####################################################################################
+#Downsample
+#####################################################################################
+
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
+ds_index = extract_frm_downsampledfile(file)
+x = x[ds_index,:]
+xlabel = xlabel[ds_index]*1.e+4
+ylabel = ylabel*1.e+4
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 ##############################################################################
 #Creating validation data set
 
@@ -151,11 +173,23 @@ print(x_train.shape,x_trainlabel.shape)
 
 print(x.shape)
 
+train_mean = np.mean(x_train)
+train_std  = np.std(x_train)
+
+label_mean = np.mean(x_trainlabel)
+label_std  = np.std(x_trainlabel)
+
+x_train = (x_train - train_mean)/train_std
+x_test  = (x_test - train_mean)/train_std
+x_val   = (x_val - train_mean)/train_std
+
+y = (y - train_mean)/train_std
+#############################################################################
 #Model creation
+#############################################################################
 
 model = tf.keras.Sequential()
 model.add(tf.keras.Input(shape=(l,l,l,nvar)))
-model.add(tf.keras.layers.Dropout(0.9))
 #model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Conv3D(filters=16, kernel_size=(3,3,3)))
 model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
@@ -168,19 +202,21 @@ model.add(tf.keras.layers.AveragePooling3D(pool_size=(2,2,2)))
 model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Dense(8, kernel_regularizer='l1'))
 model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.Dropout(0.2))
 #model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1'))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation=tf.keras.activations.softplus))
 
 model.summary()
 
-opt = keras.optimizers.Adam(learning_rate=0.005)
+opt = keras.optimizers.Adam()#learning_rate=0.005)
+reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+                              patience=5, min_lr=0.00005)
 model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
 
 
 #Fit on training data
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=5, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=1000, validation_data=(x_val,x_vallabel))
 
 #Test 
 
@@ -188,9 +224,46 @@ score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MSE: %.2f' % (score[1]))
 
-print(model.predict(x_test[:100:]))
-print(x_testlabel[:100:])
-pred = model.predict(x[::])
-print(pred.shape)
+y_predict = model.predict(y)
+print(y_predict.shape, ylabel.shape)
+err = np.abs(y_predict[:,0]-ylabel)
+print(np.max(err))
+
+###########################################################################
+#Plotting
+###########################################################################
+#print(err.shape, ylabel.shape)
+
+ax =plt.gca()
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.scatter(ylabel*1.e-4, y_predict*1.e-4)
+plt.xlabel('Actual error')
+plt.ylabel('Predicted error')
+plt.title('Case: 314 ambient')
+ax.set_xlim([min(ylabel*1.e-4),max(ylabel*1.e-4)])
+ax.set_ylim([min(ylabel*1.e-4),max(ylabel*1.e-4)])
+plt.show()
+
+err = np.reshape(err, (T.shape[0]-(l-1),T.shape[1]-(l-1),T.shape[2]-(l-1)))
+
+plt.figure()
+plt.imshow(err[:,:,40]*1.e-4, cmap = 'Reds') #, vmin = 0, vmax = 50)
+plt.colorbar()
+plt.show()
+
+y_predict = np.reshape(y_predict, (T.shape[0]-(l-1),T.shape[1]-(l-1),T.shape[2]-(l-1)))
+
+plt.figure()
+plt.imshow(y_predict[:,:,40]*1.e-4, cmap ='Reds', vmin = 0, vmax = np.max(ylabel)*1.e-4)
+plt.colorbar()
+plt.show()
+
+ylabel = np.reshape(ylabel, (T.shape[0]-(l-1),T.shape[1]-(l-1),T.shape[2]-(l-1)))
+plt.figure()
+plt.imshow(ylabel[:,:,40]*1.e-4, cmap = 'Reds', vmin = 0, vmax = np.max(ylabel)*1.e-4)
+plt.colorbar()
+
+plt.show()
 
 #print(np.max(xlabel-pred[:,0]))
