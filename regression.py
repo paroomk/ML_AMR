@@ -142,9 +142,9 @@ def extract_frm_downsampledfile(file):
     #print(ds_index)
     return ds_index
 
-path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-path1 = path + 'plt0_75346'
-path2 = path + 'plt1_75346'
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt0_85101' #'plt0_75346'
+path2 = path + 'plt1_85101' #'plt1_75346'
 
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
 #xlabel = xlabel 
@@ -189,14 +189,17 @@ x_trainlabel = np.delete(x_trainlabel, test_index, 0)
 
 print(x_train.shape,x_trainlabel.shape)
 
+train_mean = np.zeros(nvar)
+train_std = np.zeros(nvar)
+
 for i in range(0, nvar):
-    train_mean = np.mean(x_train[:,i])
-    train_std  = np.std(x_train[:,i])
+    train_mean[i] = np.mean(x_train[:,i])
+    train_std[i]  = np.std(x_train[:,i])
     
-    x_train[:,i] = (x_train[:,i] - train_mean)/train_std
-    x_test[:,i] = (x_test[:,i]- train_mean)/train_std
-    x_val[:,i]  = (x_val[:,i] - train_mean)/train_std
-    y[:,i] = (y[:,i] - train_mean)/train_std
+    x_train[:,i] = (x_train[:,i] - train_mean[i])/train_std[i]
+    x_test[:,i] = (x_test[:,i]- train_mean[i])/train_std[i]
+    x_val[:,i]  = (x_val[:,i] - train_mean[i])/train_std[i]
+    y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
 
 label_mean = np.mean(x_trainlabel)
 label_std  = np.std(x_trainlabel)
@@ -208,7 +211,7 @@ x_vallabel = (x_vallabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
 
 ylabel = (ylabel - label_mean)/label_std
-
+print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 #exit()
 
 #print(x.shape)
@@ -262,7 +265,7 @@ model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsolute
 #        break 
 #study.finalize(trial=trial)
     
-history = model.fit(x_train, x_trainlabel, batch_size=256, epochs=100, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
+history = model.fit(x_train, x_trainlabel, batch_size=256, epochs=50, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
     #study.finalize(trial)
 
 #############################################################################
@@ -293,8 +296,8 @@ y_predict = np.abs(y_predict)
 #Test on different case
 ###########################################################################
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt0_85101'
-path2 = path + 'plt1_85101'
+path1 = path + 'plt0_85102'
+path2 = path + 'plt1_85102'
 
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
 #xlabel = xlabel 
@@ -302,8 +305,12 @@ print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)
 y = x
 xlabel = xlabel*sf
 ylabel = xlabel
-y = (y - train_mean)/train_std
+
+for i in range(0, nvar):
+    y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
+
 ylabel = (ylabel - label_mean)/label_std
+print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
 y_predict = model.predict(y)
 print(y_predict.shape, ylabel.shape)
@@ -311,7 +318,8 @@ ylabel = ylabel/sf
 y_predict = y_predict/sf
 err = np.abs(y_predict-ylabel)
 print(np.max(err))
-
+ylabel = np.abs(ylabel)
+y_predict = np.abs(y_predict)
 ###########################################################################
 #Plotting
 ###########################################################################
