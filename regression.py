@@ -51,13 +51,7 @@ def extract_frm_pltfile(path1, path2):
     print(data0['Temp'].shape)
     print(data1['Temp'].shape)
     T = np.array(data0['Temp'])
-    T1 = np.array(data1['Temp'])
-
-    T = (T-np.mean(T))/np.std(T) 
-    T1 = (T1-np.mean(T1))/np.std(T1) 
-
-    diff = np.abs(T-T1)
-    label = diff 
+    T1 = np.array(data1['Temp']) 
 
     print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
 
@@ -68,32 +62,44 @@ def extract_frm_pltfile(path1, path2):
     #plt.show()
 
     #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
-    nvar =  15
 
     u = np.array(data0['x_velocity'])
     v = np.array(data0['y_velocity'])
     w = np.array(data0['z_velocity'])
     e = np.array(data0['eint_e'])
-    #E = np.array(data0['eint_E'])
     rho = np.array(data0['density'])
     pr = np.array(data0['pressure'])
-    #
-    
+
+    #split here
+    X0 = T
+    # return X0, X1
+    ##############################################################
+    #def process_data(X0,X0.mean(axis = 0), X0.std(axis = 0),X1):
+    #for loop here:
     u = (u-np.mean(u))/np.std(u) 
     v = (v-np.mean(v))/np.std(v) 
     w = (w-np.mean(w))/np.std(w) 
     e = (e-np.mean(e))/np.std(e) 
-    #E = (E-np.mean(E))/np.std(E) 
     rho = (rho-np.mean(rho))/np.std(rho) 
     pr = (pr-np.mean(pr))/np.std(pr) 
-    
+
+    T = (T-np.mean(T))/np.std(T) 
+    T1 = (T1-np.mean(T1))/np.std(T1) 
+
+    diff = np.abs(T-T1)
+    label = diff
+
+    print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
+
+    nvar =  6
+
     Tx, Ty, Tz = np.gradient(np.array(data0['Temp']))
     ux, uy, uz = np.gradient(np.array(data0['x_velocity']))
     vx, vy, vz = np.gradient(np.array(data0['y_velocity']))
     wx, wy, wz = np.gradient(np.array(data0['z_velocity']))
     
-    #T = np.stack((T,u,v,w,e,pr),axis=-1)
-    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
+    T = np.stack((T,u,v,w,e,pr),axis=-1)
+    #T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
     l=3 #size of box
@@ -159,7 +165,7 @@ ylabel = xlabel
 file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_100000.npz'
 ds_index = extract_frm_downsampledfile(file)
 x = x[ds_index,:]
-sf = 1.e+0
+sf = 1.e+3
 xlabel = xlabel[ds_index]*sf
 ylabel = ylabel*sf
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
@@ -197,20 +203,20 @@ for i in range(0, nvar):
     train_std[i]  = np.std(x_train[:,i])
     
     x_train[:,i] = (x_train[:,i] - train_mean[i])/train_std[i]
-    x_test[:,i] = (x_test[:,i]- train_mean[i])/train_std[i]
-    x_val[:,i]  = (x_val[:,i] - train_mean[i])/train_std[i]
-    y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
+    x_test[:,i]  = (x_test[:,i]- train_mean[i])/train_std[i]
+    x_val[:,i]   = (x_val[:,i] - train_mean[i])/train_std[i]
+    y[:,i]       = (y[:,i] - train_mean[i])/train_std[i]
 
 label_mean = np.mean(x_trainlabel)
 label_std  = np.std(x_trainlabel)
 
-x_trainlabel = (x_trainlabel - label_mean)/label_std
-x_testlabel = (x_testlabel - label_mean)/label_std
-x_vallabel = (x_vallabel - label_mean)/label_std
+#x_trainlabel = (x_trainlabel - label_mean)/label_std
+#x_testlabel = (x_testlabel - label_mean)/label_std
+#x_vallabel = (x_vallabel - label_mean)/label_std
 
 print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
 
-ylabel = (ylabel - label_mean)/label_std
+#ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 #exit()
 
@@ -232,12 +238,12 @@ print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)
 model = tf.keras.Sequential()
 
 #Fully connected network
-model.add(tf.keras.layers.Dense(32, input_dim=nvar*l**3, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, activation='relu', kernel_regularizer='l1'))
 model.add(tf.keras.layers.BatchNormalization())
 #model.add(tf.keras.layers.Dropout(0.2))
 #model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, kernel_regularizer='l1'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-model.add(tf.keras.layers.Dense(8, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(128, activation='relu', kernel_regularizer='l1'))
 model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.Dropout(0.2))
 #model.add(tf.keras.layers.Dense(128, kernel_regularizer='l1'))
@@ -295,9 +301,9 @@ y_predict = np.abs(y_predict)
 ###########################################################################
 #Test on different case
 ###########################################################################
-path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt0_85102'
-path2 = path + 'plt1_85102'
+path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+path1 = path + 'plt0_75346'
+path2 = path + 'plt1_75346'
 
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
 #xlabel = xlabel 
@@ -309,7 +315,7 @@ ylabel = xlabel
 for i in range(0, nvar):
     y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
 
-ylabel = (ylabel - label_mean)/label_std
+#ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
 y_predict = model.predict(y)
@@ -345,7 +351,7 @@ plt.show()
 y_predict = np.reshape(y_predict, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 
 plt.figure()
-plt.imshow(y_predict[:,:,40], cmap ='Reds', vmin = 0, vmax = np.max(ylabel))
+plt.imshow(y_predict[:,:,40], cmap ='Reds') #, vmin = 0, vmax = np.max(ylabel))
 plt.colorbar()
 plt.show()
 
