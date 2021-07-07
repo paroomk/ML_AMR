@@ -1,5 +1,6 @@
 #Script to identify cells based on error threshold + ML training to identify cells ith error above threshold
 
+from socket import MSG_EOR
 import numpy as np
 #from mpi4py import MPI
 import matplotlib.pyplot as plt
@@ -52,7 +53,8 @@ def extract_frm_pltfile(path1, path2):
     print(data1['Temp'].shape)
     T = np.array(data0['Temp'])
     T1 = np.array(data1['Temp']) 
-
+    u1 = np.array(data1['x_velocity']) 
+    
     print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
 
     #print(diff[:,:,47])
@@ -85,24 +87,26 @@ def extract_frm_pltfile(path1, path2):
 
     T = (T-np.mean(T))/np.std(T) 
     T1 = (T1-np.mean(T1))/np.std(T1) 
+    u1 = (u1-np.mean(u1))/np.std(u1) 
 
-    diff = np.abs(T-T1)
+    diff = np.abs(u-u1)
     label = diff
 
     print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
 
-    nvar =  6
+    nvar =  15
 
     Tx, Ty, Tz = np.gradient(np.array(data0['Temp']))
     ux, uy, uz = np.gradient(np.array(data0['x_velocity']))
     vx, vy, vz = np.gradient(np.array(data0['y_velocity']))
     wx, wy, wz = np.gradient(np.array(data0['z_velocity']))
     
-    T = np.stack((T,u,v,w,e,pr),axis=-1)
-    #T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
+    #T = np.stack((T,u,v,w,rho,e,pr),axis=-1)
+    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
-    l=3 #size of box
+    l=3
+     #size of box
     m = l//2
 
     if m==0:
@@ -210,13 +214,13 @@ for i in range(0, nvar):
 label_mean = np.mean(x_trainlabel)
 label_std  = np.std(x_trainlabel)
 
-#x_trainlabel = (x_trainlabel - label_mean)/label_std
-#x_testlabel = (x_testlabel - label_mean)/label_std
-#x_vallabel = (x_vallabel - label_mean)/label_std
+x_trainlabel = (x_trainlabel - label_mean)/label_std
+x_testlabel = (x_testlabel - label_mean)/label_std
+x_vallabel = (x_vallabel - label_mean)/label_std
 
 print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
 
-#ylabel = (ylabel - label_mean)/label_std
+ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 #exit()
 
@@ -225,60 +229,64 @@ print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)
 #Sherpa set up
 #############################################################################
 
-#parameters = [sherpa.Continuous(name='lr', range=[0.0001, 0.01], scale='log')]
-#alg = sherpa.algorithms.RandomSearch(max_num_trials=5)
+parameters = [sherpa.Continuous(name='lr', range=[0.0001, 0.001], scale='log'),
+              sherpa.Continuous(name='dropout', range=[0, 0.4]),
+              sherpa.Ordinal(name='batch_size', range=[16, 32, 64, 128, 256]),
+              sherpa.Ordinal(name='num_hidden_units1', range=[16, 32, 64, 128]),
+              sherpa.Ordinal(name='num_hidden_units2', range=[8, 16, 32, 64, 128])]
 
-#study = sherpa.Study(parameters=parameters,algorithm=alg,lower_is_better=False)
+alg = sherpa.algorithms.RandomSearch(max_num_trials=50)
+
+study = sherpa.Study(parameters=parameters,algorithm=alg,lower_is_better=False)
 
 #############################################################################
 #Model creation
 #############################################################################
 
-#for trial in study:
-model = tf.keras.Sequential()
-
-#Fully connected network
-model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.BatchNormalization())
-#model.add(tf.keras.layers.Dropout(0.2))
-#model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, kernel_regularizer='l1'))
-#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-model.add(tf.keras.layers.Dense(128, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.BatchNormalization())
-model.add(tf.keras.layers.Dropout(0.2))
-#model.add(tf.keras.layers.Dense(128, kernel_regularizer='l1'))
-#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-#model.add(tf.keras.layers.Dense(1, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1'))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-
-model.summary()
-opt = keras.optimizers.Adam()#learning_rate=0.001) #trial.parameters['lr'])
-reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
-                              patience=5, min_lr=1.e-6)
-model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
-
+for trial in study:
+    model = tf.keras.Sequential()
+    #Fully connected network
+    model.add(tf.keras.layers.Dense(trial.parameters['num_hidden_units1'], input_dim=nvar*l**3, activation='relu', kernel_regularizer='l1'))
+    model.add(tf.keras.layers.BatchNormalization())
+    #model.add(tf.keras.layers.Dropout(0.2))
+    #model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, kernel_regularizer='l1'))
+    #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+    model.add(tf.keras.layers.Dense(trial.parameters['num_hidden_units2'], activation='relu', kernel_regularizer='l1'))
+    model.add(tf.keras.layers.BatchNormalization())
+    model.add(tf.keras.layers.Dropout(trial.parameters['dropout']))
+    #model.add(tf.keras.layers.Dense(128, kernel_regularizer='l1'))
+    #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+    #model.add(tf.keras.layers.Dense(1, activation='relu', kernel_regularizer='l1'))
+    model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1'))
+    model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+    model.summary()
+    opt = keras.optimizers.Adam(learning_rate=trial.parameters['lr'])
+    #reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+                                  #patience=5, min_lr=1.e-6)
+    model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
+    
 #############################################################################
 #Fit on training data
 #############################################################################
-#for i in range(2):
-#    model.fit(x_train, x_trainlabel)
-#    loss, accuracy = model.evaluate(x_test, x_testlabel)
-#    study.add_observation(trial=trial, iteration=i,
-#                          objective=accuracy,
-#                          context={'loss': loss})
-#    if study.should_trial_stop(trial):
-#        break 
-#study.finalize(trial=trial)
+    for i in range(30):
+        model.fit(x_train, x_trainlabel)
+        loss, mae = model.evaluate(x_val, x_vallabel)
+        study.add_observation(trial=trial, iteration=i,
+                          objective=loss,
+                          context={'mae': mae})
+        if study.should_trial_stop(trial):
+           break 
+    study.finalize(trial=trial)
     
-history = model.fit(x_train, x_trainlabel, batch_size=256, epochs=50, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
-    #study.finalize(trial)
+#history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=70, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
+   
 
 #############################################################################
 #Test 
 #############################################################################
 
-#print(study.get_best_result())
+print(study.get_best_result())
+exit()
 
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
@@ -315,7 +323,7 @@ ylabel = xlabel
 for i in range(0, nvar):
     y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
 
-#ylabel = (ylabel - label_mean)/label_std
+ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
 y_predict = model.predict(y)
@@ -326,6 +334,11 @@ err = np.abs(y_predict-ylabel)
 print(np.max(err))
 ylabel = np.abs(ylabel)
 y_predict = np.abs(y_predict)
+
+score = model.evaluate(y, ylabel)
+print('Loss: %.2f' % (score[0]))
+print('MSE: %.2f' % (score[1]))
+#exit()
 ###########################################################################
 #Plotting
 ###########################################################################

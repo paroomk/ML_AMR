@@ -13,16 +13,18 @@ from tensorflow import keras
 
 
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt0_85101'
+path2 = path + 'plt1_85101'
 
-def extract_frm_pltfile(path):
+def extract_frm_pltfile(path1,path2):
     # Get data all projected to a uniform grid at the coarsest level
     min_level = 0
     
-    amrex_plt_file0 = path + 'plt0_85101'
+    amrex_plt_file0 = path1
     ds0 = yt.load(amrex_plt_file0)
     ds0.print_stats()
     
-    amrex_plt_file1 = path + 'plt1_85101'
+    amrex_plt_file1 = path2
     ds1 = yt.load(amrex_plt_file1)
     ds1.print_stats()
     
@@ -52,8 +54,11 @@ def extract_frm_pltfile(path):
     print(data1['Temp'].shape)
     T = np.array(data0['Temp'])
     T1 = np.array(data1['Temp'])
-    
-    diff = np.abs(T1- T)
+
+    T = (T-np.mean(T))/np.std(T) 
+    T1 = (T1-np.mean(T1))/np.std(T1) 
+
+    diff = np.abs(T-T1)
     label = diff 
     
     #Comment these lines for regression
@@ -70,22 +75,32 @@ def extract_frm_pltfile(path):
     #plt.show()
     
     #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
-    nvar =  4
+    nvar =  7
     
     u = np.array(data0['x_velocity'])
     v = np.array(data0['y_velocity'])
     w = np.array(data0['z_velocity'])
-    #rho = np.array(data0['density'])
-    #pr = np.array(data0['pressure'])
+    e = np.array(data0['eint_e'])
+    rho = np.array(data0['density'])
+    pr = np.array(data0['pressure'])
     #
-    T = (T-np.mean(T))/np.std(T) 
+    #T = (T-np.mean(T))/np.std(T) 
     u = (u-np.mean(u))/np.std(u) 
     v = (v-np.mean(v))/np.std(v) 
     w = (w-np.mean(w))/np.std(w) 
-    #rho = (rho-np.mean(rho))/np.std(rho) 
-    #pr = (pr-np.mean(pr))/np.std(pr) 
+    e = (e-np.mean(e))/np.std(e) 
+    rho = (rho-np.mean(rho))/np.std(rho) 
+    pr = (pr-np.mean(pr))/np.std(pr) 
     #
-    T = np.stack((T,u,v,w),axis=-1)
+
+    Tx, Ty, Tz = np.gradient(np.array(data0['Temp']))
+    ux, uy, uz = np.gradient(np.array(data0['Temp']))
+    vx, vy, vz = np.gradient(np.array(data0['Temp']))
+    wx, wy, wz = np.gradient(np.array(data0['Temp']))
+    
+    T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
+    #T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,pr),axis=-1)
+
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
     
     l=7 #size of box
@@ -134,8 +149,8 @@ def extract_frm_downsampledfile(file):
 #x = np.append(x,xT, axis=0)
 #xlabel = np.append(xlabel,xlabel, axis=0)
 
-#################################################
-x, xlabel, nvar, l, T = extract_frm_pltfile(path)
+#####################################################################################
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
 y = x
 ylabel = xlabel
 #####################################################################################
@@ -145,8 +160,9 @@ ylabel = xlabel
 file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
 ds_index = extract_frm_downsampledfile(file)
 x = x[ds_index,:]
-xlabel = xlabel[ds_index]*1.e+4
-ylabel = ylabel*1.e+4
+sf = 1.e+0
+xlabel = xlabel[ds_index]*sf
+ylabel = ylabel*sf
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 ##############################################################################
 #Creating validation data set
@@ -176,14 +192,25 @@ print(x.shape)
 train_mean = np.mean(x_train)
 train_std  = np.std(x_train)
 
-label_mean = np.mean(x_trainlabel)
-label_std  = np.std(x_trainlabel)
 
 x_train = (x_train - train_mean)/train_std
 x_test  = (x_test - train_mean)/train_std
 x_val   = (x_val - train_mean)/train_std
 
 y = (y - train_mean)/train_std
+
+l_mean = np.mean(x_trainlabel)
+l_std  = np.std(x_trainlabel)
+print(l_std)
+
+x_trainlabel = (x_trainlabel - l_mean)/l_std
+x_testlabel = (x_testlabel - l_mean)/l_std
+x_vallabel = (x_vallabel - l_mean)/l_std
+
+print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
+
+ylabel = (ylabel - l_mean)/l_std
+
 #############################################################################
 #Model creation
 #############################################################################
@@ -191,7 +218,7 @@ y = (y - train_mean)/train_std
 model = tf.keras.Sequential()
 model.add(tf.keras.Input(shape=(l,l,l,nvar)))
 #model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Conv3D(filters=16, kernel_size=(3,3,3)))
+model.add(tf.keras.layers.Conv3D(filters=4, kernel_size=(3,3,3)))
 model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.AveragePooling3D(pool_size=(2,2,2)))
 #model.add(tf.keras.layers.Conv3D(filters=8, kernel_size=(3,3,3)))
@@ -202,66 +229,132 @@ model.add(tf.keras.layers.AveragePooling3D(pool_size=(2,2,2)))
 model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Dense(8, kernel_regularizer='l1'))
 model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-model.add(tf.keras.layers.Dropout(0.2))
+model.add(tf.keras.layers.Dropout(0.11))
 #model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
 model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation=tf.keras.activations.softplus))
 
 model.summary()
 
-opt = keras.optimizers.Adam()#learning_rate=0.005)
-reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
-                              patience=5, min_lr=0.00005)
+opt = keras.optimizers.Adam(learning_rate=0.0001)
+#reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+#                              patience=5, min_lr=0.00005)
 model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
 
-
+###############################################################################################
 #Fit on training data
+###############################################################################################
 
-history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=1000, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=500, validation_data=(x_val,x_vallabel))
 
+###############################################################################################
 #Test 
+###############################################################################################
 
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MSE: %.2f' % (score[1]))
+###############################################################################################
+#Visualize filters
+###############################################################################################
+# summarize filter shapes
+for layer in model.layers:
+	# check for convolutional layer
+	if 'conv' not in layer.name:
+		continue
+	# get filter weights
+	filters, biases = layer.get_weights()
+	print(layer.name, filters.shape)
+
+f_min, f_max = filters.min(), filters.max()
+filters = (filters - f_min) / (f_max - f_min)
+
+n_filters, ix = 4, 1
+for i in range(n_filters):
+	# get the filter
+	f = filters[:, :, :, :, i]
+	# plot each channel separately
+	for j in range(3):
+		# specify subplot and turn of axis
+		ax = plt.subplot(n_filters, 3, ix)
+		ax.set_xticks([])
+		ax.set_yticks([])
+		# plot filter channel in grayscale
+		plt.imshow(f[:, :, j, 1], cmap='gray')
+		ix += 1
+
+plt.show()
+#################################################################################################
+#Visualize feautures
+#################################################################################################
+exit()
 
 y_predict = model.predict(y)
 print(y_predict.shape, ylabel.shape)
 err = np.abs(y_predict[:,0]-ylabel)
 print(np.max(err))
 
+ylabel = np.abs(ylabel)
+y_predict = np.abs(y_predict)
+
+###########################################################################
+#Test on different case
+###########################################################################
+path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+path1 = path + 'plt0_75346'
+path2 = path + 'plt1_75346'
+
+#x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
+##xlabel = xlabel 
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#y = x
+#xlabel = xlabel*sf
+#ylabel = xlabel
+#y = (y - train_mean)/train_std
+#
+#y_predict = model.predict(y)
+#print(y_predict.shape, ylabel.shape)
+#ylabel = ylabel/sf
+#y_predict = y_predict/sf
+#err = np.abs(y_predict[:,0]-ylabel)
+#print(np.max(err))
+#
+#score = model.evaluate(y, ylabel)
+#print('Loss: %.2f' % (score[0]))
+#print('MSE: %.2f' % (score[1]))
+
+
 ###########################################################################
 #Plotting
 ###########################################################################
 #print(err.shape, ylabel.shape)
-
+m =l//2
+err = np.reshape(err, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 ax =plt.gca()
 ax.set_yscale('log')
 ax.set_xscale('log')
-ax.scatter(ylabel*1.e-4, y_predict*1.e-4)
+ax.scatter(ylabel, y_predict)
 plt.xlabel('Actual error')
 plt.ylabel('Predicted error')
 plt.title('Case: 314 ambient')
-ax.set_xlim([min(ylabel*1.e-4),max(ylabel*1.e-4)])
-ax.set_ylim([min(ylabel*1.e-4),max(ylabel*1.e-4)])
+ax.set_xlim([min(ylabel*sf),max(ylabel*sf)])
+ax.set_ylim([min(ylabel*sf),max(ylabel*sf)])
 plt.show()
 
-err = np.reshape(err, (T.shape[0]-(l-1),T.shape[1]-(l-1),T.shape[2]-(l-1)))
-
 plt.figure()
-plt.imshow(err[:,:,40]*1.e-4, cmap = 'Reds') #, vmin = 0, vmax = 50)
+plt.imshow(err[:,:,40], cmap = 'Reds') #, vmin = 0, vmax = 50)
 plt.colorbar()
 plt.show()
 
-y_predict = np.reshape(y_predict, (T.shape[0]-(l-1),T.shape[1]-(l-1),T.shape[2]-(l-1)))
+y_predict = np.reshape(y_predict, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 
 plt.figure()
-plt.imshow(y_predict[:,:,40]*1.e-4, cmap ='Reds', vmin = 0, vmax = np.max(ylabel)*1.e-4)
+plt.imshow(y_predict[:,:,40], cmap ='Reds') #, vmin = 0, vmax = np.max(ylabel))
 plt.colorbar()
 plt.show()
 
-ylabel = np.reshape(ylabel, (T.shape[0]-(l-1),T.shape[1]-(l-1),T.shape[2]-(l-1)))
+ylabel = np.reshape(ylabel, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 plt.figure()
-plt.imshow(ylabel[:,:,40]*1.e-4, cmap = 'Reds', vmin = 0, vmax = np.max(ylabel)*1.e-4)
+plt.imshow(ylabel[:,:,40], cmap = 'Reds') #, vmin = 0, vmax = np.max(ylabel))
 plt.colorbar()
 
 plt.show()
