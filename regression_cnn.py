@@ -9,7 +9,6 @@ import os
 #os.putenv('DISPLAY', ':0.0')
 import tensorflow as tf
 from tensorflow import keras
-#from keras import layers
 
 
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
@@ -253,6 +252,7 @@ history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=500, validation
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MSE: %.2f' % (score[1]))
+
 ###############################################################################################
 #Visualize filters
 ###############################################################################################
@@ -263,7 +263,7 @@ for layer in model.layers:
 		continue
 	# get filter weights
 	filters, biases = layer.get_weights()
-	print(layer.name, filters.shape)
+	print(layer.name, filters.shape, layer.output.shape)
 
 f_min, f_max = filters.min(), filters.max()
 filters = (filters - f_min) / (f_max - f_min)
@@ -286,6 +286,27 @@ plt.show()
 #################################################################################################
 #Visualize feautures
 #################################################################################################
+# redefine model to output right after the first hidden layer
+submodel = tf.keras.Model(inputs=model.inputs, outputs=model.layers[1].output)
+feature_maps = submodel.predict(x_test[:1,:,:,:,:])
+
+plt.imshow(x_test[0,:,:,0,0], cmap='gray')
+plt.show()
+
+square = 2
+ix = 1
+for _ in range(square):
+	for _ in range(square):
+		# specify subplot and turn of axis
+		ax = plt.subplot(square, square, ix)
+		ax.set_xticks([])
+		ax.set_yticks([])
+		# plot filter channel in grayscale
+		plt.imshow(feature_maps[0, :, :, 0, ix-1], cmap='gray')
+		ix += 1
+# show the figure
+plt.show()
+
 exit()
 
 y_predict = model.predict(y)
