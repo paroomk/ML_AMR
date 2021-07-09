@@ -97,7 +97,13 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
 
     label = np.abs(x1-x)
 
-    nvar =  7
+    #Comment these lines for regression
+
+    #label[label<1.e-4]  = 0
+    #label[label>=1.e-4] = 1
+
+
+    nvar =  15
 
     Tx, Ty, Tz = np.gradient(x[:,:,:,0])
     ux, uy, uz = np.gradient(x[:,:,:,1])
@@ -112,13 +118,31 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
     e   = x[:,:,:,5]
     pr  = x[:,:,:,6]
 
-    #X = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
-    x = np.stack((T,u,v,w,rho,e,pr), axis = -1)
+    x = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
+    #x = np.stack((T,u,v,w,rho,e,pr), axis = -1)
     print(x.shape,label.shape)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
     xlabel = label[:,:,:,1]
     print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+
+    ##################################################
+    #Data augmentation using swap axes
+    
+    xT = np.rot90(x,k=1,axes=(0,2))
+    xT1 = np.rot90(x,k=2,axes=(0,2))
+    xT2 = np.rot90(x,k=3,axes=(0,2))
+    
+
+    x = np.append(x,xT, axis=0)
+    xlabel = np.append(xlabel,label[:,:,:,1], axis=0)
+    x = np.append(x,xT1, axis=0)
+    xlabel = np.append(xlabel,label[:,:,:,1], axis=0)
+    x = np.append(x,xT2, axis=0)
+    xlabel = np.append(xlabel,label[:,:,:,1], axis=0)
+    
+    print(x.shape,xlabel.shape)
+    #################################################
 
     return x, xlabel, nvar
 
@@ -159,6 +183,9 @@ lz = x.shape[2]
 
 xlabel = xlabel.reshape(xlabel.shape[0],ly*lz)
 
+sf = 1.e+3
+xlabel = xlabel*sf
+
 y = x
 ylabel = xlabel
 
@@ -167,7 +194,7 @@ print(y.shape, ylabel.shape)
 ##############################################################################
 #Creating validation and test data set
 ##############################################################################
-val_index = np.random.choice(np.arange(0,x.shape[0]),x.shape[0]//10,replace='False')
+val_index = np.random.choice(np.arange(0,x.shape[0]),x.shape[0]//5,replace='False')
 
 x_val = x[val_index, :,:,:]
 x_vallabel = xlabel[val_index,:]
@@ -175,7 +202,7 @@ x_vallabel = xlabel[val_index,:]
 x_train = np.delete(x, val_index, 0)
 x_trainlabel = np.delete(xlabel, val_index, 0)
 
-test_index = np.random.choice(np.arange(0,x_train.shape[0]),x.shape[0]//10,replace='False')
+test_index = np.random.choice(np.arange(0,x_train.shape[0]),5,replace='False')
 
 x_test = x[test_index,:,:,:]
 x_testlabel = xlabel[test_index,:]
@@ -189,24 +216,25 @@ print(x_train.shape,x_trainlabel.shape)
 #Normalization (features + labels)
 #############################################################################
 
-train_mean = np.mean(x_train)
-train_std  = np.std(x_train)
+train_mean = np.zeros(nvar)
+train_std = np.zeros(nvar)
 
-x_train = (x_train - train_mean)/train_std
-x_test  = (x_test - train_mean)/train_std
-x_val   = (x_val - train_mean)/train_std
+for i in range(0, nvar):
+    train_mean[i] = np.mean(x_train[:,i])
+    train_std[i]  = np.std(x_train[:,i])
+    
+    x_train[:,i] = (x_train[:,i] - train_mean[i])/train_std[i]
+    x_test[:,i]  = (x_test[:,i]- train_mean[i])/train_std[i]
+    x_val[:,i]   = (x_val[:,i] - train_mean[i])/train_std[i]
+    y[:,i]       = (y[:,i] - train_mean[i])/train_std[i]
 
-y = (y - train_mean)/train_std
-
-#l_mean = np.mean(x_trainlabel)
-#l_std  = np.std(x_trainlabel)
-#print(l_std)
+#label_mean = np.mean(x_trainlabel)
+#label_std  = np.std(x_trainlabel)
 #
-#x_trainlabel = (x_trainlabel - l_mean)/l_std
-#x_testlabel = (x_testlabel - l_mean)/l_std
-#x_vallabel = (x_vallabel - l_mean)/l_std
-#
-#ylabel = (ylabel - l_mean)/l_std
+#x_trainlabel = (x_trainlabel - label_mean)/label_std
+#x_testlabel = (x_testlabel - label_mean)/label_std
+#x_vallabel = (x_vallabel - label_mean)/label_std
+#ylabel = (ylabel - label_mean)/label_std
 
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
@@ -217,17 +245,17 @@ print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)
 model = tf.keras.Sequential()
 model.add(tf.keras.Input(shape=(ly,lz,nvar)))
 #model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3)))
+model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), activation='relu'))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
+model.add(tf.keras.layers.Conv2D(filters=16, kernel_size=(3,3), activation='relu'))
 model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
-#model.add(tf.keras.layers.Conv3D(filters=8, kernel_size=(3,3,3)))
-#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-#model.add(tf.keras.layers.MaxPooling3D(pool_size=(2,2,2)))
-#model.add(tf.keras.layers.Conv3D(filters=64, kernel_size=(3,3,3), activation='relu',input_shape=(l,l,l,nvar)))
-#model.add(tf.keras.layers.MaxPooling3D())
+model.add(tf.keras.layers.Conv2D(filters=14, kernel_size=(3,3), activation='relu'))
+model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
 model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Dense(32, kernel_regularizer='l1'))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.Dense(32, kernel_regularizer='l1', activation='relu'))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.Dropout(0.11))
 #model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
 model.add(tf.keras.layers.Dense(ly*lz, kernel_regularizer='l1', activation='relu'))
@@ -244,7 +272,7 @@ model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsolute
 #Fit on training data
 ###############################################################################################
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=1000, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=200, validation_data=(x_val,x_vallabel))
 
 ###############################################################################################
 #Test 
@@ -252,7 +280,7 @@ history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=1000, validatio
 
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
-print('MSE: %.2f' % (score[1]))
+print('MAE: %.2f' % (score[1]))
 
 #ax =plt.gca()
 #ax.set_yscale('log')
@@ -264,13 +292,15 @@ print('MSE: %.2f' % (score[1]))
 #ax.set_xlim([min(ylabel),max(ylabel)])
 #ax.set_ylim([min(ylabel),max(ylabel)])
 #plt.show()
-
-y_predict = model.predict(y[40:41,:,:,:])
-err = np.abs(y_predict-ylabel[0,:])
+m = 0
+y_predict = model.predict(y[m:m+1,:,:,:])
+ylabel = ylabel/sf
+y_predict = y_predict/sf
+err = np.abs(y_predict-ylabel[m,:])
 print(np.max(err))
 err = np.reshape(err,(ly,lz))
 y_predict = np.reshape(y_predict,(ly,lz))
-y_label = np.reshape(ylabel[0,:],(ly,lz))
+y_label = np.reshape(ylabel[m,:],(ly,lz))
 
 plt.figure()
 plt.imshow(err, cmap = 'Reds') #, vmin = 0, vmax = 50)
