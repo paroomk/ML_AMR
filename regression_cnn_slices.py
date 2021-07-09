@@ -103,7 +103,7 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
     #label[label>=1.e-4] = 1
 
 
-    nvar =  15
+    nvar =  7
 
     Tx, Ty, Tz = np.gradient(x[:,:,:,0])
     ux, uy, uz = np.gradient(x[:,:,:,1])
@@ -118,8 +118,8 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
     e   = x[:,:,:,5]
     pr  = x[:,:,:,6]
 
-    x = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
-    #x = np.stack((T,u,v,w,rho,e,pr), axis = -1)
+    #x = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
+    x = np.stack((T,u,v,w,rho,e,pr), axis = -1)
     print(x.shape,label.shape)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
@@ -167,15 +167,15 @@ for i in range(0, nvar):
     x_mean[i] = np.mean(x[:,:,:,i])
     x_std[i]  = np.std(x[:,:,:,i])
 
-    x1_mean[i] = np.mean(x1[:,:,:,i])
-    x1_std[i]  = np.std(x1[:,:,:,i])
+    #x1_mean[i] = np.mean(x1[:,:,:,i])
+    #x1_std[i]  = np.std(x1[:,:,:,i])
 
     #label_mean[i] = np.mean(xlabel[:,:,:,i])
     #label_std[i] = np.std(xlabel[:,:,:,i])
  
 print(x_mean, x_std)
 
-x, xlabel, nvar = process_data(x, x_mean, x_std, x1, x1_mean, x1_std)
+x, xlabel, nvar = process_data(x, x_mean, x_std, x1, x_mean, x_std)
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 
 ly = x.shape[1]
@@ -228,14 +228,14 @@ for i in range(0, nvar):
     x_val[:,i]   = (x_val[:,i] - train_mean[i])/train_std[i]
     y[:,i]       = (y[:,i] - train_mean[i])/train_std[i]
 
-#label_mean = np.mean(x_trainlabel)
-#label_std  = np.std(x_trainlabel)
-#
+label_mean = np.mean(x_trainlabel)
+label_std  = np.std(x_trainlabel)
+
 #x_trainlabel = (x_trainlabel - label_mean)/label_std
 #x_testlabel = (x_testlabel - label_mean)/label_std
 #x_vallabel = (x_vallabel - label_mean)/label_std
 #ylabel = (ylabel - label_mean)/label_std
-
+print()
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
 #############################################################################
@@ -247,17 +247,20 @@ model.add(tf.keras.Input(shape=(ly,lz,nvar)))
 #model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), activation='relu'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+#model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
 model.add(tf.keras.layers.Conv2D(filters=16, kernel_size=(3,3), activation='relu'))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+#model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
-model.add(tf.keras.layers.Conv2D(filters=14, kernel_size=(3,3), activation='relu'))
-model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
+#model.add(tf.keras.layers.Conv2D(filters=14, kernel_size=(3,3), activation='relu'))
+#model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
 model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Dense(32, kernel_regularizer='l1', activation='relu'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+#model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.Dropout(0.11))
-#model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
 model.add(tf.keras.layers.Dense(ly*lz, kernel_regularizer='l1', activation='relu'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 
@@ -282,6 +285,37 @@ score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MAE: %.2f' % (score[1]))
 
+###########################################################################
+#Test on different case
+###########################################################################
+path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+path1 = path + 'plt0_75346'
+path2 = path + 'plt1_75346'
+
+x, x1, nvar = extract_frm_pltfile(path1, path2)
+for i in range(0, nvar): 
+    x_mean[i] = np.mean(x[:,:,:,i])
+    x_std[i]  = np.std(x[:,:,:,i])
+    #x1_mean[i] = np.mean(x1[:,:,:,i])
+    #x1_std[i]  = np.std(x1[:,:,:,i])
+    #label_mean[i] = np.mean(xlabel[:,:,:,i])
+    #label_std[i] = np.std(xlabel[:,:,:,i])
+
+#y, ylabel, nvar = process_data(x, x_mean, x_std, x1, x_mean, x_std)
+#ylabel = ylabel.reshape(ylabel.shape[0],ly*lz)
+###xlabel = xlabel 
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#ylabel = ylabel*sf
+#ylabel = (ylabel - label_mean)/label_std
+####exit
+###
+#for i in range(0, nvar):
+#    y[:,i] = (y[:,i]_mean[i])/train_std[i]
+##
+#print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
+
+
+
 #ax =plt.gca()
 #ax.set_yscale('log')
 #ax.set_xscale('log')
@@ -292,7 +326,7 @@ print('MAE: %.2f' % (score[1]))
 #ax.set_xlim([min(ylabel),max(ylabel)])
 #ax.set_ylim([min(ylabel),max(ylabel)])
 #plt.show()
-m = 0
+m = 40
 y_predict = model.predict(y[m:m+1,:,:,:])
 ylabel = ylabel/sf
 y_predict = y_predict/sf
