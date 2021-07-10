@@ -92,8 +92,8 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
     n = x.shape[-1]
     print(n)
     for i in range(0,n):
-        x[:,:,:,i] = (x[:,:,:,i]-x_mean[i])/x_std[i] 
-        x1[:,:,:,i] = (x1[:,:,:,i]-x1_mean[i])/x1_std[i] 
+        x[:,:,:,i] = (x[:,:,:,i]/x_mean[i])#/x_std[i] 
+        x1[:,:,:,i] = (x1[:,:,:,i]/x1_mean[i])#/x1_std[i] 
 
     label = np.abs(x1-x)
 
@@ -183,7 +183,7 @@ lz = x.shape[2]
 
 xlabel = xlabel.reshape(xlabel.shape[0],ly*lz)
 
-sf = 1.e+3
+sf = 1.e+2
 xlabel = xlabel*sf
 
 y = x
@@ -245,11 +245,11 @@ print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)
 model = tf.keras.Sequential()
 model.add(tf.keras.Input(shape=(ly,lz,nvar)))
 #model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), activation='relu'))
+model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), activation='relu', kernel_regularizer='l1'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 #model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
-model.add(tf.keras.layers.Conv2D(filters=16, kernel_size=(3,3), activation='relu'))
+model.add(tf.keras.layers.Conv2D(filters=16, kernel_size=(3,3), activation='relu', kernel_regularizer='l1'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 #model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
@@ -301,16 +301,16 @@ for i in range(0, nvar):
     #label_mean[i] = np.mean(xlabel[:,:,:,i])
     #label_std[i] = np.std(xlabel[:,:,:,i])
 
-#y, ylabel, nvar = process_data(x, x_mean, x_std, x1, x_mean, x_std)
-#ylabel = ylabel.reshape(ylabel.shape[0],ly*lz)
-###xlabel = xlabel 
-#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-#ylabel = ylabel*sf
+y, ylabel, nvar = process_data(x, x_mean, x_std, x1, x_mean, x_std)
+ylabel = ylabel.reshape(ylabel.shape[0],ly*lz)
+##xlabel = xlabel 
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+ylabel = ylabel*sf
 #ylabel = (ylabel - label_mean)/label_std
 ####exit
 ###
-#for i in range(0, nvar):
-#    y[:,i] = (y[:,i]_mean[i])/train_std[i]
+for i in range(0, nvar):
+    y[:,i] = (y[:,i]-train_mean[i])/train_std[i]
 ##
 #print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
