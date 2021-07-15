@@ -2,18 +2,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
 import yt
-#matplotlib.use('Qt5Agg')
-import os
-#os.putenv('DISPLAY', ':0.0')
 import tensorflow as tf
 from tensorflow import keras
-
-
-path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt0_85101'
-path2 = path + 'plt1_85101'
 
 def extract_frm_pltfile(path1,path2):
     # Get data all projected to a uniform grid at the coarsest level
@@ -49,23 +40,15 @@ def extract_frm_pltfile(path1,path2):
     data0 = ds0.smoothed_covering_grid(min_level, left_edge=low0, dims=dims0, num_ghost_zones=1)
     data1 = ds1.smoothed_covering_grid(min_level, left_edge=low1, dims=dims1, num_ghost_zones=1)
     
-    print(data0['Temp'].shape)
-    print(data1['Temp'].shape)
     T = np.array(data0['Temp'])
     T1 = np.array(data1['Temp'])
 
-    T = (T-np.mean(T))/np.std(T) 
-    T1 = (T1-np.mean(T1))/np.std(T1) 
-
-    diff = np.abs(T-T1)
-    label = diff 
+    print(np.mean(T),np.mean(T1))
     
     #Comment these lines for regression
     
-    #label[diff<1.e-10]  = 0
-    #label[diff>=1.e-10] = 1
-    
-    print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
+    #label[diff<1.e-4]  = 0
+    #label[diff>=1.e-4] = 1
     
     #print(diff[:,:,47])
     
@@ -74,35 +57,48 @@ def extract_frm_pltfile(path1,path2):
     #plt.show()
     
     #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
-    nvar =  7
-    
+    nvar =  15
+
+    Tmean = np.mean(T)
+
+    T = (T/Tmean)#/np.std(T) 
+    T1 = (T1/Tmean)#/np.std(T) 
+
     u = np.array(data0['x_velocity'])
+    u1 = np.array(data1['x_velocity'])
+
+    umean = np.mean(u)
+
     v = np.array(data0['y_velocity'])
     w = np.array(data0['z_velocity'])
     e = np.array(data0['eint_e'])
     rho = np.array(data0['density'])
     pr = np.array(data0['pressure'])
-    #
-    #T = (T-np.mean(T))/np.std(T) 
-    u = (u-np.mean(u))/np.std(u) 
-    v = (v-np.mean(v))/np.std(v) 
-    w = (w-np.mean(w))/np.std(w) 
-    e = (e-np.mean(e))/np.std(e) 
-    rho = (rho-np.mean(rho))/np.std(rho) 
-    pr = (pr-np.mean(pr))/np.std(pr) 
-    #
 
-    Tx, Ty, Tz = np.gradient(np.array(data0['Temp']))
-    ux, uy, uz = np.gradient(np.array(data0['Temp']))
-    vx, vy, vz = np.gradient(np.array(data0['Temp']))
-    wx, wy, wz = np.gradient(np.array(data0['Temp']))
+    u1 = (u1/np.mean(u))#/np.std(u)
+    u = (u/np.mean(u))#/np.std(u) 
+    v = (v/np.mean(v))#/np.std(v) 
+    w = (w/np.mean(w))#/np.std(w) 
+    e = (e/np.mean(e))#/np.std(e) 
+    rho = (rho/np.mean(rho))#/np.std(rho) 
+    pr = (pr/np.mean(pr))#/np.std(pr) 
+    #
+    diff = np.abs(u-u1)
+    label = diff 
+
+    print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
+
+    Tx, Ty, Tz = np.gradient(data0['Temp'])
+    ux, uy, uz = np.gradient(data0['x_velocity'])
+    vx, vy, vz = np.gradient(data0['y_velocity'])
+    wx, wy, wz = np.gradient(data0['z_velocity'])
     
-    T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
-    #T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,pr),axis=-1)
+    #T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
+    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,e,rho,pr),axis=-1)
 
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
     
-    l=7 #size of box
+    l=9 #size of box
     m = l//2
     
     Ti = T[m:-m,m:-m,m:-m,:] #Exclude boundary points
@@ -124,12 +120,6 @@ def extract_frm_pltfile(path1,path2):
             x[p,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
         xlabel[p]  = label[i+l//2,j+l//2,k+l//2]
     
-    #Test data and training data is created below
-    
-    #Remove quiscent regions
-    #x = np.delete(x, (np.abs(xlabel)<1.e-3).nonzero(), 0)
-    #xlabel = np.delete(xlabel, (np.abs(xlabel)<1.e-3).nonzero(), 0)
-    #xlabel = (xlabel-np.mean(xlabel))/np.std(xlabel)
     print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
     
     return x, xlabel, nvar, l, T
@@ -140,43 +130,38 @@ def extract_frm_downsampledfile(file):
     #print(ds_index)
     return ds_index
 
-##################################################
-#Data augmentation using swap axes
-
-#xT = np.rot90(x,k=1,axes=(1,2))
-#
-#x = np.append(x,xT, axis=0)
-#xlabel = np.append(xlabel,xlabel, axis=0)
-
 #####################################################################################
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt0_85101'
+path2 = path + 'plt1_85101'
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
 y = x
 ylabel = xlabel
 #####################################################################################
 #Downsample
 #####################################################################################
-
 file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
 ds_index = extract_frm_downsampledfile(file)
-x = x[ds_index,:]
+ds_index = ds_index[ds_index<x.shape[0]]
+x = x[ds_index,:,:,:]
 sf = 1.e+0
 xlabel = xlabel[ds_index]*sf
 ylabel = ylabel*sf
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 ##############################################################################
 #Creating validation data set
-
-val_index = np.random.choice(np.arange(0,x.shape[0]),100,replace='False')
+############################################################################## 
+val_index = np.random.choice(np.arange(0,x.shape[0]),x.shape[0]//5,replace='False')
 
 x_val = x[val_index, :,:,:,:]
 x_vallabel = xlabel[val_index]
 
 x_train = np.delete(x, val_index, 0)
 x_trainlabel = np.delete(xlabel, val_index, 0)
-
 #############################################################################
-
-test_index = np.random.choice(np.arange(0,x_train.shape[0]),100,replace='False')
+#Creating test data set
+#############################################################################
+test_index = np.random.choice(np.arange(0,x_train.shape[0]),x.shape[0]//5,replace='False')
 
 x_test = x[test_index,:,:,:,:]
 x_testlabel = xlabel[test_index]
@@ -185,40 +170,39 @@ x_train = np.delete(x_train, test_index, 0)
 x_trainlabel = np.delete(x_trainlabel, test_index, 0)
 
 print(x_train.shape,x_trainlabel.shape)
-
-print(x.shape)
+#############################################################################
+#Normalization
+#############################################################################
 
 train_mean = np.mean(x_train)
-train_std  = np.std(x_train)
-
+train_std = np.std(x_train)
 
 x_train = (x_train - train_mean)/train_std
-x_test  = (x_test - train_mean)/train_std
+x_test  = (x_test- train_mean)/train_std
 x_val   = (x_val - train_mean)/train_std
-
-y = (y - train_mean)/train_std
-
+y       = (y - train_mean)/train_std
+    
 l_mean = np.mean(x_trainlabel)
 l_std  = np.std(x_trainlabel)
+
+l_min = np.min(x_trainlabel)
+l_max  = np.max(x_trainlabel)
+
 print(l_std)
 
-x_trainlabel = (x_trainlabel - l_mean)/l_std
-x_testlabel = (x_testlabel - l_mean)/l_std
-x_vallabel = (x_vallabel - l_mean)/l_std
+#x_trainlabel = (x_trainlabel)/l_std
+#x_testlabel = (x_testlabel)/l_std
+#x_vallabel = (x_vallabel)/l_std
 
 print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
-
-ylabel = (ylabel - l_mean)/l_std
-
 #############################################################################
 #Model creation
 #############################################################################
-
 model = tf.keras.Sequential()
 model.add(tf.keras.Input(shape=(l,l,l,nvar)))
 #model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Conv3D(filters=4, kernel_size=(3,3,3)))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.Conv3D(filters=4, kernel_size=(3,3,3), activation='relu'))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.AveragePooling3D(pool_size=(2,2,2)))
 #model.add(tf.keras.layers.Conv3D(filters=8, kernel_size=(3,3,3)))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
@@ -226,11 +210,12 @@ model.add(tf.keras.layers.AveragePooling3D(pool_size=(2,2,2)))
 #model.add(tf.keras.layers.Conv3D(filters=64, kernel_size=(3,3,3), activation='relu',input_shape=(l,l,l,nvar)))
 #model.add(tf.keras.layers.MaxPooling3D())
 model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Dense(8, kernel_regularizer='l1'))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.Dense(8, kernel_regularizer='l1', activation='relu'))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.Dropout(0.11))
 #model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation=tf.keras.activations.softplus))
+model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation='relu'))#, activation=tf.keras.activations.softplus))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 
 model.summary()
 
@@ -238,111 +223,108 @@ opt = keras.optimizers.Adam(learning_rate=0.0001)
 #reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
 #                              patience=5, min_lr=0.00005)
 model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
-
 ###############################################################################################
 #Fit on training data
 ###############################################################################################
-
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=500, validation_data=(x_val,x_vallabel))
-
+history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=100, validation_data=(x_val,x_vallabel))
 ###############################################################################################
 #Test 
 ###############################################################################################
-
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MSE: %.2f' % (score[1]))
-
 ###############################################################################################
 #Visualize filters
 ###############################################################################################
 # summarize filter shapes
-for layer in model.layers:
-	# check for convolutional layer
-	if 'conv' not in layer.name:
-		continue
-	# get filter weights
-	filters, biases = layer.get_weights()
-	print(layer.name, filters.shape, layer.output.shape)
-
-f_min, f_max = filters.min(), filters.max()
-filters = (filters - f_min) / (f_max - f_min)
-
-n_filters, ix = 4, 1
-for i in range(n_filters):
-	# get the filter
-	f = filters[:, :, :, :, i]
-	# plot each channel separately
-	for j in range(3):
-		# specify subplot and turn of axis
-		ax = plt.subplot(n_filters, 3, ix)
-		ax.set_xticks([])
-		ax.set_yticks([])
-		# plot filter channel in grayscale
-		plt.imshow(f[:, :, j, 1], cmap='gray')
-		ix += 1
-
-plt.show()
+#for layer in model.layers:
+#	# check for convolutional layer
+#	if 'conv' not in layer.name:
+#		continue
+#	# get filter weights
+#	filters, biases = layer.get_weights()
+#	print(layer.name, filters.shape, layer.output.shape)
+#
+#f_min, f_max = filters.min(), filters.max()
+#filters = (filters - f_min) / (f_max - f_min)
+#
+#n_filters, ix = 4, 1
+#for i in range(n_filters):
+#	# get the filter
+#	f = filters[:, :, :, :, i]
+#	# plot each channel separately
+#	for j in range(3):
+#		# specify subplot and turn of axis
+#		ax = plt.subplot(n_filters, 3, ix)
+#		ax.set_xticks([])
+#		ax.set_yticks([])
+#		# plot filter channel in grayscale
+#		plt.imshow(f[:, :, j, 1], cmap='gray')
+#		ix += 1
+#
+#plt.show()
 #################################################################################################
 #Visualize feautures
 #################################################################################################
 # redefine model to output right after the first hidden layer
-submodel = tf.keras.Model(inputs=model.inputs, outputs=model.layers[1].output)
-feature_maps = submodel.predict(x_test[:1,:,:,:,:])
+#submodel = tf.keras.Model(inputs=model.inputs, outputs=model.layers[1].output)
+#feature_maps = submodel.predict(x_test[:1,:,:,:,:])
 
-plt.imshow(x_test[0,:,:,0,0], cmap='gray')
-plt.show()
+#plt.imshow(x_test[0,:,:,0,0], cmap='gray')
+#plt.show()
 
-square = 2
-ix = 1
-for _ in range(square):
-	for _ in range(square):
-		# specify subplot and turn of axis
-		ax = plt.subplot(square, square, ix)
-		ax.set_xticks([])
-		ax.set_yticks([])
-		# plot filter channel in grayscale
-		plt.imshow(feature_maps[0, :, :, 0, ix-1], cmap='gray')
-		ix += 1
-# show the figure
-plt.show()
+#square = 2
+#ix = 1
+#for _ in range(square):
+#	for _ in range(square):
+#		# specify subplot and turn of axis
+#		ax = plt.subplot(square, square, ix)
+#		ax.set_xticks([])
+#		ax.set_yticks([])
+#		# plot filter channel in grayscale
+#		plt.imshow(feature_maps[0, :, :, 0, ix-1], cmap='gray')
+#		ix += 1
+## show the figure
+#plt.show()
 
-exit()
+#exit()
 
-y_predict = model.predict(y)
-print(y_predict.shape, ylabel.shape)
-err = np.abs(y_predict[:,0]-ylabel)
-print(np.max(err))
-
-ylabel = np.abs(ylabel)
-y_predict = np.abs(y_predict)
+#y_predict = model.predict(y)
+#print(y_predict.shape, ylabel.shape)
+#err = np.abs(y_predict[:,0]-ylabel)
+#print(np.max(err))
+#
+#ylabel = np.abs(ylabel)
+#y_predict = np.abs(y_predict)
 
 ###########################################################################
-#Test on different case
+#Test on a different case
 ###########################################################################
 path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
 path1 = path + 'plt0_75346'
 path2 = path + 'plt1_75346'
 
-#x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
-##xlabel = xlabel 
-#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-#y = x
-#xlabel = xlabel*sf
-#ylabel = xlabel
-#y = (y - train_mean)/train_std
-#
-#y_predict = model.predict(y)
-#print(y_predict.shape, ylabel.shape)
-#ylabel = ylabel/sf
-#y_predict = y_predict/sf
-#err = np.abs(y_predict[:,0]-ylabel)
-#print(np.max(err))
-#
-#score = model.evaluate(y, ylabel)
-#print('Loss: %.2f' % (score[0]))
-#print('MSE: %.2f' % (score[1]))
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
+#xlabel = xlabel 
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+y = x
+xlabel = xlabel*sf
+ylabel = xlabel
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 
+y   = (y - train_mean)/train_std
+#ylabel = (ylabel)/l_std
+
+y_predict = model.predict(y)
+print(y_predict.shape, ylabel.shape)
+ylabel = ylabel/sf
+y_predict = y_predict/sf
+err = np.abs(y_predict[:,0]-ylabel)
+print(np.max(err))
+
+score = model.evaluate(y, ylabel)
+print('Loss: %.2f' % (score[0]))
+print('MSE: %.2f' % (score[1]))
 
 ###########################################################################
 #Plotting
