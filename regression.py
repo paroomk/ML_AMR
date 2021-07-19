@@ -14,8 +14,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-def extract_frm_pltfile(path1, path2):
-    min_level = 0
+def extract_frm_pltfile(path1, path2, level):
+    min_level = level
 
     amrex_plt_file0 = path1
     ds0 = yt.load(amrex_plt_file0)
@@ -156,43 +156,69 @@ path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
 path1 = path + 'plt0_85101' #'plt0_75346'
 path2 = path + 'plt1_85101' #'plt1_75346'
 
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
-#xlabel = xlabel 
+level = 0
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level)
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 y = x
 ylabel = xlabel
+
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt1_85101' #'plt0_75346'
+path2 = path + 'plt2_85101' #'plt1_75346'
+
+level=1
+x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+y1 = x1
+ylabel1 = xlabel1
 #exit()
 ##############################################################################
 #Downsampled data
 ##############################################################################
 
-file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_100000.npz'
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
 ds_index = extract_frm_downsampledfile(file)
 x = x[ds_index,:]
 sf = 1.e+3
 xlabel = xlabel[ds_index]*sf
 ylabel = ylabel*sf
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+
+
+print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
+ds_index = extract_frm_downsampledfile(file)
+x1= x1[ds_index,:]
+sf = 1.e+3
+xlabel1 = xlabel1[ds_index]*sf
+ylabel1 = ylabel1*sf
+
+print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
+
+xx = np.concatenate((x,x1),axis=0)
+xxlabel = np.concatenate((xlabel,xlabel1),axis=0)
+
+
 #exit()
 ##############################################################################
 #Creating validation data set
 ##############################################################################
 
-val_index = np.random.choice(np.arange(0,x.shape[0]),x.shape[0]//5,replace='False')
+val_index = np.random.choice(np.arange(0,xx.shape[0]),xx.shape[0]//5,replace='False')
 
-x_val = x[val_index, :]
-x_vallabel = xlabel[val_index]
+x_val = xx[val_index, :]
+x_vallabel = xxlabel[val_index]
 
-x_train = np.delete(x, val_index, 0)
-x_trainlabel = np.delete(xlabel, val_index, 0)
+x_train = np.delete(xx, val_index, 0)
+x_trainlabel = np.delete(xxlabel, val_index, 0)
 
 ##############################################################################
 #Creating test data set
 ##############################################################################
-test_index = np.random.choice(np.arange(0,x.shape[0]),x.shape[0]//5,replace='False')
+test_index = np.random.choice(np.arange(0,x_train.shape[0]),xx.shape[0]//5,replace='False')
 
-x_test = x[test_index,:]
-x_testlabel = xlabel[test_index]
+x_test = x_train[test_index,:]
+x_testlabel = x_trainlabel[test_index]
 
 x_train = np.delete(x_train, test_index, 0)
 x_trainlabel = np.delete(x_trainlabel, test_index, 0)
@@ -214,13 +240,13 @@ for i in range(0, nvar):
 label_mean = np.mean(x_trainlabel)
 label_std  = np.std(x_trainlabel)
 
-x_trainlabel = (x_trainlabel - label_mean)/label_std
-x_testlabel = (x_testlabel - label_mean)/label_std
-x_vallabel = (x_vallabel - label_mean)/label_std
+#x_trainlabel = (x_trainlabel - label_mean)/label_std
+#x_testlabel = (x_testlabel - label_mean)/label_std
+#x_vallabel = (x_vallabel - label_mean)/label_std
 
 print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
 
-ylabel = (ylabel - label_mean)/label_std
+#ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 #exit()
 
@@ -229,64 +255,64 @@ print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)
 #Sherpa set up
 #############################################################################
 
-parameters = [sherpa.Continuous(name='lr', range=[0.0001, 0.001], scale='log'),
-              sherpa.Continuous(name='dropout', range=[0, 0.4]),
-              sherpa.Ordinal(name='batch_size', range=[16, 32, 64, 128, 256]),
-              sherpa.Ordinal(name='num_hidden_units1', range=[16, 32, 64, 128]),
-              sherpa.Ordinal(name='num_hidden_units2', range=[8, 16, 32, 64, 128])]
-
-alg = sherpa.algorithms.RandomSearch(max_num_trials=50)
-
-study = sherpa.Study(parameters=parameters,algorithm=alg,lower_is_better=False)
+#parameters = [sherpa.Continuous(name='lr', range=[0.0001, 0.001], scale='log'),
+#              sherpa.Continuous(name='dropout', range=[0, 0.4]),
+#              sherpa.Ordinal(name='batch_size', range=[16, 32, 64, 128, 256]),
+#              sherpa.Ordinal(name='num_hidden_units1', range=[16, 32, 64, 128]),
+#              sherpa.Ordinal(name='num_hidden_units2', range=[8, 16, 32, 64, 128])]
+#
+#alg = sherpa.algorithms.RandomSearch(max_num_trials=50)
+#
+#study = sherpa.Study(parameters=parameters,algorithm=alg,lower_is_better=False)
 
 #############################################################################
 #Model creation
 #############################################################################
 
-for trial in study:
-    model = tf.keras.Sequential()
-    #Fully connected network
-    model.add(tf.keras.layers.Dense(trial.parameters['num_hidden_units1'], input_dim=nvar*l**3, activation='relu', kernel_regularizer='l1'))
-    model.add(tf.keras.layers.BatchNormalization())
-    #model.add(tf.keras.layers.Dropout(0.2))
-    #model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, kernel_regularizer='l1'))
-    #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-    model.add(tf.keras.layers.Dense(trial.parameters['num_hidden_units2'], activation='relu', kernel_regularizer='l1'))
-    model.add(tf.keras.layers.BatchNormalization())
-    model.add(tf.keras.layers.Dropout(trial.parameters['dropout']))
-    #model.add(tf.keras.layers.Dense(128, kernel_regularizer='l1'))
-    #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-    #model.add(tf.keras.layers.Dense(1, activation='relu', kernel_regularizer='l1'))
-    model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1'))
-    model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-    model.summary()
-    opt = keras.optimizers.Adam(learning_rate=trial.parameters['lr'])
-    #reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
-                                  #patience=5, min_lr=1.e-6)
-    model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
-    
+#for trial in study:
+model = tf.keras.Sequential()
+#Fully connected network
+model.add(tf.keras.layers.Dense(32, input_dim=nvar*l**3, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.BatchNormalization())
+#model.add(tf.keras.layers.Dense(128, input_dim=nvar*l**3, kernel_regularizer='l1'))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.add(tf.keras.layers.Dense(64, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.BatchNormalization())
+model.add(tf.keras.layers.Dropout(0.4))
+#model.add(tf.keras.layers.Dropout(0.2))
+#model.add(tf.keras.layers.Dense(128, kernel_regularizer='l1'))
+#model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+#model.add(tf.keras.layers.Dense(1, activation='relu', kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1'))
+model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
+model.summary()
+opt = keras.optimizers.Adam(learning_rate=0.0003)
+#reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+                              #patience=5, min_lr=1.e-6)
+model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
+
 #############################################################################
 #Fit on training data
 #############################################################################
-    for i in range(30):
-        model.fit(x_train, x_trainlabel)
-        loss, mae = model.evaluate(x_val, x_vallabel)
-        study.add_observation(trial=trial, iteration=i,
-                          objective=loss,
-                          context={'mae': mae})
-        if study.should_trial_stop(trial):
-           break 
-    study.finalize(trial=trial)
+    #for i in range(30):
+    #    model.fit(x_train, x_trainlabel)
+    #    loss, mae = model.evaluate(x_val, x_vallabel)
+    #    study.add_observation(trial=trial, iteration=i,
+    #                      objective=loss,
+    #                      context={'mae': mae})
+    #    if study.should_trial_stop(trial):
+    #       break 
+    #study.finalize(trial=trial)
     
-#history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=70, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
+history = model.fit(x_train, x_trainlabel, batch_size=256, epochs=60, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
    
 
 #############################################################################
 #Test 
 #############################################################################
 
-print(study.get_best_result())
-exit()
+#print(study.get_best_result())
+#exit()
 
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
@@ -310,10 +336,10 @@ y_predict = np.abs(y_predict)
 #Test on different case
 ###########################################################################
 path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-path1 = path + 'plt0_75346'
-path2 = path + 'plt1_75346'
+path1 = path + 'plt1_75346'
+path2 = path + 'plt2_75346'
 
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0)
 #xlabel = xlabel 
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 y = x
@@ -323,7 +349,7 @@ ylabel = xlabel
 for i in range(0, nvar):
     y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
 
-ylabel = (ylabel - label_mean)/label_std
+#ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
 
 y_predict = model.predict(y)
