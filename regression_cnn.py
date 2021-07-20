@@ -6,9 +6,9 @@ import yt
 import tensorflow as tf
 from tensorflow import keras
 
-def extract_frm_pltfile(path1,path2):
+def extract_frm_pltfile(path1,path2, level):
     # Get data all projected to a uniform grid at the coarsest level
-    min_level = 0
+    min_level = level
     
     amrex_plt_file0 = path1
     ds0 = yt.load(amrex_plt_file0)
@@ -98,7 +98,7 @@ def extract_frm_pltfile(path1,path2):
 
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
     
-    l=9 #size of box
+    l=5 #size of box
     m = l//2
     
     Ti = T[m:-m,m:-m,m:-m,:] #Exclude boundary points
@@ -134,9 +134,21 @@ def extract_frm_downsampledfile(file):
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
 path1 = path + 'plt0_85101'
 path2 = path + 'plt1_85101'
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
+
+level=0
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level)
 y = x
 ylabel = xlabel
+
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt1_85101' #'plt0_75346'
+path2 = path + 'plt2_85101' #'plt1_75346'
+
+level=1
+x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+y1 = x1
+ylabel1 = xlabel1
 #####################################################################################
 #Downsample
 #####################################################################################
@@ -147,14 +159,29 @@ x = x[ds_index,:,:,:]
 sf = 1.e+0
 xlabel = xlabel[ds_index]*sf
 ylabel = ylabel*sf
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
+ds_index = extract_frm_downsampledfile(file)
+ds_index = ds_index[ds_index<x.shape[0]]
+x1= x1[ds_index,:,:,:]
+sf = 1.e+3
+xlabel1 = xlabel1[ds_index]*sf
+ylabel1 = ylabel1*sf
+
+print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
+
+xx = np.concatenate((x,x1),axis=0)
+xxlabel = np.concatenate((xlabel,xlabel1),axis=0)
+
+
 ##############################################################################
 #Creating validation data set
 ############################################################################## 
-val_index = np.random.choice(np.arange(0,x.shape[0]),x.shape[0]//5,replace='False')
+val_index = np.random.choice(np.arange(0,xx.shape[0]),xx.shape[0]//5,replace='False')
 
-x_val = x[val_index, :,:,:,:]
-x_vallabel = xlabel[val_index]
+x_val = xx[val_index, :,:,:,:]
+x_vallabel = xxlabel[val_index]
 
 x_train = np.delete(x, val_index, 0)
 x_trainlabel = np.delete(xlabel, val_index, 0)
@@ -163,8 +190,8 @@ x_trainlabel = np.delete(xlabel, val_index, 0)
 #############################################################################
 test_index = np.random.choice(np.arange(0,x_train.shape[0]),x.shape[0]//5,replace='False')
 
-x_test = x[test_index,:,:,:,:]
-x_testlabel = xlabel[test_index]
+x_test = x_train[test_index,:,:,:,:]
+x_testlabel = x_trainlabel[test_index]
 
 x_train = np.delete(x_train, test_index, 0)
 x_trainlabel = np.delete(x_trainlabel, test_index, 0)
@@ -226,7 +253,7 @@ model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsolute
 ###############################################################################################
 #Fit on training data
 ###############################################################################################
-history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=100, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=200, validation_data=(x_val,x_vallabel))
 ###############################################################################################
 #Test 
 ###############################################################################################
@@ -300,19 +327,19 @@ print('MSE: %.2f' % (score[1]))
 ###########################################################################
 #Test on a different case
 ###########################################################################
-path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-path1 = path + 'plt0_75346'
-path2 = path + 'plt1_75346'
-
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
-#xlabel = xlabel 
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-y = x
-xlabel = xlabel*sf
-ylabel = xlabel
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-
-y   = (y - train_mean)/train_std
+#path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+#path1 = path + 'plt0_75346'
+#path2 = path + 'plt1_75346'
+#
+#x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
+##xlabel = xlabel 
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#y = x
+#xlabel = xlabel*sf
+#ylabel = xlabel
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#
+#y   = (y - train_mean)/train_std
 #ylabel = (ylabel)/l_std
 
 y_predict = model.predict(y)
@@ -325,8 +352,8 @@ print(np.max(err))
 score = model.evaluate(y, ylabel)
 print('Loss: %.2f' % (score[0]))
 print('MSE: %.2f' % (score[1]))
-
-###########################################################################
+#exit()
+##########################################################################
 #Plotting
 ###########################################################################
 #print(err.shape, ylabel.shape)
