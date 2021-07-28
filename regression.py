@@ -14,7 +14,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-def extract_frm_pltfile(path1, path2, level):
+def extract_frm_pltfile(path1, path2, level, train, file):
     min_level = level
 
     amrex_plt_file0 = path1
@@ -78,19 +78,24 @@ def extract_frm_pltfile(path1, path2, level):
     ##############################################################
     #def process_data(X0,X0.mean(axis = 0), X0.std(axis = 0),X1):
     #for loop here:
-    u = (u-np.mean(u))/np.std(u) 
-    v = (v-np.mean(v))/np.std(v) 
-    w = (w-np.mean(w))/np.std(w) 
-    e = (e-np.mean(e))/np.std(e) 
-    rho = (rho-np.mean(rho))/np.std(rho) 
-    pr = (pr-np.mean(pr))/np.std(pr) 
+    u = (u/np.mean(u))#/np.std(u) 
+    v = (v/np.mean(v))#/np.std(v) 
+    w = (w/np.mean(w))#/np.std(w) 
+    e = (e/np.mean(e))#/np.std(e) 
+    rho = (rho/np.mean(rho))#/np.std(rho) 
+    pr = (pr/np.mean(pr))#/np.std(pr) 
 
-    T = (T-np.mean(T))/np.std(T) 
-    T1 = (T1-np.mean(T1))/np.std(T1) 
-    u1 = (u1-np.mean(u1))/np.std(u1) 
+    T = (T/np.mean(T))#/np.std(T) 
+    T1 = (T1/np.mean(T1))#/np.std(T1) 
+    u1 = (u1/np.mean(u1))#/np.std(u1) 
 
     diff = np.abs(u-u1)
     label = diff
+
+    #Comment these lines for regression
+    
+    label[diff<1.e-2]  = 0
+    label[diff>=1.e-2] = 1
 
     print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
 
@@ -116,24 +121,31 @@ def extract_frm_pltfile(path1, path2, level):
 
     print(Ti.shape)
 
-    s = (Ti.size//nvar,l,l,l,nvar)
-
+    if (train):
+       ds_index = extract_frm_downsampledfile(file)
+       indices = ds_index
+    else:
+       i, j = np.meshgrid(np.arange(Ti.shape[1]),np.arange(Ti.shape[0]))
+       indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[1]
+       indices = indices.reshape((indices.size))
+       #indices = np.arange(0,Ti.size//nvar)
+       
+    s = (indices.size,l,l,l,nvar)
     x = np.zeros(s)
     print(x.shape)
-    xlabel = np.zeros(Ti.size//nvar)
+    xlabel = np.zeros(indices.size)
+    n=0
 
-    for p in range(0,Ti.size//nvar):
+    for p in indices:
         i = p%Ti.shape[0]
         j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
         k = p//(Ti.shape[0]*Ti.shape[1])
         #print(p)
         #print(i,j,k)
         for m in range(0, nvar):
-            x[p,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
-            #x[p,:,:,:,m] = T[i+l//2,j+l//2,k+l//2,m]
-        xlabel[p]  = label[i+l//2,j+l//2,k+l//2]
-
-    #Test data and training data is created below
+            x[n,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
+        xlabel[n]  = label[i+l//2,j+l//2,k+l//2]
+        n = n+1
 
     #xlabel = (xlabel-np.mean(xlabel))/np.std(xlabel)
     print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
@@ -154,49 +166,43 @@ def extract_frm_downsampledfile(file):
 
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
 path1 = path + 'plt0_85101' #'plt0_75346'
-path2 = path + 'plt1_85101' #'plt1_75346'
+path2 = path + 'plt2_85101' #'plt1_75346'
 
 level = 0
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level)
+train = True
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level, train, file)
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 y = x
 ylabel = xlabel
 
-path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt1_85101' #'plt0_75346'
-path2 = path + 'plt2_85101' #'plt1_75346'
+#path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+#path1 = path + 'plt1_85101' #'plt0_75346'
+#path2 = path + 'plt2_85101' #'plt1_75346'
 
-level=1
-x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-y1 = x1
-ylabel1 = xlabel1
+#level=1
+#x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#y1 = x1
+#ylabel1 = xlabel1
 #exit()
 ##############################################################################
 #Downsampled data
 ##############################################################################
 
-file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
-ds_index = extract_frm_downsampledfile(file)
-x = x[ds_index,:]
-sf = 1.e+3
-xlabel = xlabel[ds_index]*sf
+sf = 1.e+0
 ylabel = ylabel*sf
-
 
 print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 
-file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
-ds_index = extract_frm_downsampledfile(file)
-x1= x1[ds_index,:]
-sf = 1.e+3
-xlabel1 = xlabel1[ds_index]*sf
-ylabel1 = ylabel1*sf
 
-print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
+#sf = 1.e+0
+#ylabel1 = ylabel1*sf
 
-xx = np.concatenate((x,x1),axis=0)
-xxlabel = np.concatenate((xlabel,xlabel1),axis=0)
+#print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
+
+xx = x #np.concatenate((x,x1),axis=0)
+xxlabel = xlabel #np.concatenate((xlabel,xlabel1),axis=0)
 
 
 #exit()
@@ -279,17 +285,13 @@ model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.Dense(64, activation='relu', kernel_regularizer='l1'))
 model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.Dropout(0.4))
-#model.add(tf.keras.layers.Dropout(0.2))
-#model.add(tf.keras.layers.Dense(128, kernel_regularizer='l1'))
+model.add(tf.keras.layers.Dense(1, activation='sigmoid', kernel_regularizer='l1'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-#model.add(tf.keras.layers.Dense(1, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1'))
-model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.summary()
 opt = keras.optimizers.Adam(learning_rate=0.0003)
 #reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
                               #patience=5, min_lr=1.e-6)
-model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
+model.compile(optimizer= opt, loss='mse', metrics=['accuracy'])
 
 #############################################################################
 #Fit on training data
@@ -304,7 +306,7 @@ model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsolute
     #       break 
     #study.finalize(trial=trial)
     
-history = model.fit(x_train, x_trainlabel, batch_size=256, epochs=60, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
+history = model.fit(x_train, x_trainlabel, batch_size=256, epochs=250, validation_data=(x_val,x_vallabel)) #, callbacks=[study.keras_callback(trial, objective_name='val_loss')])
    
 
 #############################################################################
@@ -318,11 +320,6 @@ score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MSE: %.2f' % (score[1]))
 
-#exit()
-
-#pred = model.predict(x_test)
-#print(x_testlabel[100:200],pred[100:200,0])
-#print(np.max(x_testlabel[:-1]-pred[:-1,0])*1.e-4)
 y_predict = model.predict(y)
 print(y_predict.shape, ylabel.shape)
 ylabel = ylabel/sf
@@ -336,10 +333,10 @@ y_predict = np.abs(y_predict)
 #Test on different case
 ###########################################################################
 path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-path1 = path + 'plt1_75346'
+path1 = path + 'plt0_75346'
 path2 = path + 'plt2_75346'
 
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0)
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0, False, file)
 #xlabel = xlabel 
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 y = x
@@ -356,7 +353,7 @@ y_predict = model.predict(y)
 print(y_predict.shape, ylabel.shape)
 ylabel = ylabel/sf
 y_predict = y_predict/sf
-err = np.abs(y_predict-ylabel)
+err = (y_predict-ylabel)
 print(np.max(err))
 ylabel = np.abs(ylabel)
 y_predict = np.abs(y_predict)
@@ -370,33 +367,36 @@ print('MSE: %.2f' % (score[1]))
 ###########################################################################
 #print(err.shape, ylabel.shape)
 m =l//2
-err = np.reshape(err, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
-ax =plt.gca()
-ax.set_yscale('log')
-ax.set_xscale('log')
-ax.scatter(ylabel, y_predict)
-plt.xlabel('Actual error')
-plt.ylabel('Predicted error')
-plt.title('Case: 314 ambient')
-ax.set_xlim([min(ylabel),max(ylabel)])
-ax.set_ylim([min(ylabel),max(ylabel)])
-plt.show()
+#err = np.reshape(err, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+err = np.reshape(err, (T.shape[1]-2*m,T.shape[0]-2*m,1))
+#ax =plt.gca()
+#ax.set_yscale('log')
+#ax.set_xscale('log')
+#ax.scatter(ylabel, y_predict)
+#plt.xlabel('Actual error')
+#plt.ylabel('Predicted error')
+#plt.title('Case: 314 ambient')
+#ax.set_xlim([min(ylabel),max(ylabel)])
+#ax.set_ylim([min(ylabel),max(ylabel)])
+#plt.show()
 
 plt.figure()
-plt.imshow(err[:,:,40], cmap = 'Reds') #, vmin = 0, vmax = 50)
+plt.imshow(err[:,:,0], cmap = 'seismic', vmin = -1, vmax = 1)
 plt.colorbar()
 plt.show()
 
-y_predict = np.reshape(y_predict, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+#y_predict = np.reshape(y_predict, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+y_predict = np.reshape(y_predict, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 
 plt.figure()
-plt.imshow(y_predict[:,:,40], cmap ='Reds') #, vmin = 0, vmax = np.max(ylabel))
+plt.imshow(y_predict[:,:,0], cmap ='Reds', vmin = 0, vmax = 1)
 plt.colorbar()
 plt.show()
 
-ylabel = np.reshape(ylabel, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+#ylabel = np.reshape(ylabel, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+ylabel = np.reshape(ylabel, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 plt.figure()
-plt.imshow(ylabel[:,:,40], cmap = 'Reds', vmin = 0, vmax = np.max(ylabel))
+plt.imshow(ylabel[:,:,0], cmap = 'Reds', vmin = 0, vmax = 1)
 plt.colorbar()
 
 plt.show()

@@ -6,7 +6,7 @@ import yt
 import tensorflow as tf
 from tensorflow import keras
 
-def extract_frm_pltfile(path1,path2, level):
+def extract_frm_pltfile(path1,path2, level, train, file):
     # Get data all projected to a uniform grid at the coarsest level
     min_level = level
     
@@ -45,11 +45,6 @@ def extract_frm_pltfile(path1,path2, level):
 
     print(np.mean(T),np.mean(T1))
     
-    #Comment these lines for regression
-    
-    #label[diff<1.e-4]  = 0
-    #label[diff>=1.e-4] = 1
-    
     #print(diff[:,:,47])
     
     #plt.figure()
@@ -57,7 +52,7 @@ def extract_frm_pltfile(path1,path2, level):
     #plt.show()
     
     #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
-    nvar =  15
+    nvar =  7
 
     Tmean = np.mean(T)
 
@@ -86,6 +81,11 @@ def extract_frm_pltfile(path1,path2, level):
     diff = np.abs(u-u1)
     label = diff 
 
+    #Comment these lines for regression
+    
+    #label[diff<1.e-2]  = 0
+    #label[diff>=1.e-2] = 1
+
     print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
 
     Tx, Ty, Tz = np.gradient(data0['Temp'])
@@ -93,8 +93,8 @@ def extract_frm_pltfile(path1,path2, level):
     vx, vy, vz = np.gradient(data0['y_velocity'])
     wx, wy, wz = np.gradient(data0['z_velocity'])
     
-    #T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
-    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,e,rho,pr),axis=-1)
+    T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
+    #T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,e,rho,pr),axis=-1)
 
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
     
@@ -103,22 +103,33 @@ def extract_frm_pltfile(path1,path2, level):
     
     Ti = T[m:-m,m:-m,m:-m,:] #Exclude boundary points
     print(Ti.shape)
+
+    if (train):
+       ds_index = extract_frm_downsampledfile(file)
+       indices = ds_index
+       ds_index = ds_index[ds_index<Ti.size]
+    else:
+       i, j = np.meshgrid(np.arange(Ti.shape[1]),np.arange(Ti.shape[0]))
+       indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[1]
+       indices = indices.reshape((indices.size))
+       #indices = np.arange(0,Ti.size//nvar)
     
-    s = (Ti.size//nvar,l,l,l,nvar)
-    
+    s = (indices.size,l,l,l,nvar)
     x = np.zeros(s)
     print(x.shape)
-    xlabel = np.zeros(Ti.size//nvar)
-    
-    for p in range(0,Ti.size//nvar):
+    xlabel = np.zeros(indices.size)
+    n=0
+
+    for p in indices:
         i = p%Ti.shape[0]
         j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
         k = p//(Ti.shape[0]*Ti.shape[1])
         #print(p)
         #print(i,j,k)
         for m in range(0, nvar):
-            x[p,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
-        xlabel[p]  = label[i+l//2,j+l//2,k+l//2]
+            x[n,:,:,:,m] = T[i:i+l,j:j+l,k:k+l,m]
+        xlabel[n]  = label[i+l//2,j+l//2,k+l//2]
+        n = n+1
     
     print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
     
@@ -131,12 +142,15 @@ def extract_frm_downsampledfile(file):
     return ds_index
 
 #####################################################################################
-path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt0_85101'
-path2 = path + 'plt1_85101'
+path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+
+path1 = path + 'plt0_75346'
+path2 = path + 'plt2_75346'
 
 level=0
-x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level)
+train = True
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_350_01/downSampledData_10000.npz'
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level, train, file)
 y = x
 ylabel = xlabel
 
@@ -144,35 +158,31 @@ path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
 path1 = path + 'plt1_85101' #'plt0_75346'
 path2 = path + 'plt2_85101' #'plt1_75346'
 
-level=1
-x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
-print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-y1 = x1
-ylabel1 = xlabel1
+#level=1
+#x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#y1 = x1
+#ylabel1 = xlabel1
 #####################################################################################
 #Downsample
 #####################################################################################
-file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
-ds_index = extract_frm_downsampledfile(file)
-ds_index = ds_index[ds_index<x.shape[0]]
-x = x[ds_index,:,:,:]
-sf = 1.e+0
-xlabel = xlabel[ds_index]*sf
+
+sf = 1.e+1
+xlabel = xlabel*sf
 ylabel = ylabel*sf
 print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 
-file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
-ds_index = extract_frm_downsampledfile(file)
-ds_index = ds_index[ds_index<x.shape[0]]
-x1= x1[ds_index,:,:,:]
-sf = 1.e+3
-xlabel1 = xlabel1[ds_index]*sf
-ylabel1 = ylabel1*sf
+#file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
+#ds_index = extract_frm_downsampledfile(file)
+#ds_index = ds_index[ds_index<x.shape[0]]
+#x1= x1[ds_index,:,:,:]
+#xlabel1 = xlabel1[ds_index]*sf
+#ylabel1 = ylabel1*sf
 
-print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
+#print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
 
-xx = np.concatenate((x,x1),axis=0)
-xxlabel = np.concatenate((xlabel,xlabel1),axis=0)
+xx = x #np.concatenate((x,x1),axis=0)
+xxlabel = xlabel #np.concatenate((xlabel,xlabel1),axis=0)
 
 
 ##############################################################################
@@ -183,12 +193,12 @@ val_index = np.random.choice(np.arange(0,xx.shape[0]),xx.shape[0]//5,replace='Fa
 x_val = xx[val_index, :,:,:,:]
 x_vallabel = xxlabel[val_index]
 
-x_train = np.delete(x, val_index, 0)
-x_trainlabel = np.delete(xlabel, val_index, 0)
+x_train = np.delete(xx, val_index, 0)
+x_trainlabel = np.delete(xxlabel, val_index, 0)
 #############################################################################
 #Creating test data set
 #############################################################################
-test_index = np.random.choice(np.arange(0,x_train.shape[0]),x.shape[0]//5,replace='False')
+test_index = np.random.choice(np.arange(0,x_train.shape[0]),xx.shape[0]//5,replace='False')
 
 x_test = x_train[test_index,:,:,:,:]
 x_testlabel = x_trainlabel[test_index]
@@ -249,11 +259,11 @@ model.summary()
 opt = keras.optimizers.Adam(learning_rate=0.0001)
 #reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
 #                              patience=5, min_lr=0.00005)
-model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsoluteError()])
+model.compile(optimizer= opt, loss='mse', metrics=['accuracy'])
 ###############################################################################################
 #Fit on training data
 ###############################################################################################
-history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=200, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=150, validation_data=(x_val,x_vallabel))
 ###############################################################################################
 #Test 
 ###############################################################################################
@@ -327,19 +337,20 @@ print('MSE: %.2f' % (score[1]))
 ###########################################################################
 #Test on a different case
 ###########################################################################
-#path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-#path1 = path + 'plt0_75346'
-#path2 = path + 'plt1_75346'
-#
-#x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2)
-##xlabel = xlabel 
-#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-#y = x
-#xlabel = xlabel*sf
-#ylabel = xlabel
-#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-#
-#y   = (y - train_mean)/train_std
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt0_85101'
+path2 = path + 'plt2_85101'
+
+
+x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0, False, file)
+#xlabel = xlabel 
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+y = x
+xlabel = xlabel*sf
+ylabel = xlabel
+print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+
+y   = (y - train_mean)/train_std
 #ylabel = (ylabel)/l_std
 
 y_predict = model.predict(y)
@@ -358,7 +369,7 @@ print('MSE: %.2f' % (score[1]))
 ###########################################################################
 #print(err.shape, ylabel.shape)
 m =l//2
-err = np.reshape(err, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+err = np.reshape(err, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 ax =plt.gca()
 ax.set_yscale('log')
 ax.set_xscale('log')
@@ -366,25 +377,24 @@ ax.scatter(ylabel, y_predict)
 plt.xlabel('Actual error')
 plt.ylabel('Predicted error')
 plt.title('Case: 314 ambient')
-ax.set_xlim([min(ylabel*sf),max(ylabel*sf)])
-ax.set_ylim([min(ylabel*sf),max(ylabel*sf)])
+ax.set_xlim([min(ylabel),max(ylabel)])
+ax.set_ylim([min(ylabel),max(ylabel)])
 plt.show()
 
 plt.figure()
-plt.imshow(err[:,:,40], cmap = 'Reds') #, vmin = 0, vmax = 50)
+plt.imshow(err[:,:,0], cmap = 'seismic') #, vmin = -1, vmax = 1)
 plt.colorbar()
 plt.show()
 
-y_predict = np.reshape(y_predict, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
+y_predict = np.reshape(y_predict, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 
 plt.figure()
-plt.imshow(y_predict[:,:,40], cmap ='Reds') #, vmin = 0, vmax = np.max(ylabel))
+plt.imshow(y_predict[:,:,0], cmap ='Reds') #, vmin = 0, vmax = 1)
 plt.colorbar()
 plt.show()
 
-ylabel = np.reshape(ylabel, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
-plt.figure()
-plt.imshow(ylabel[:,:,40], cmap = 'Reds') #, vmin = 0, vmax = np.max(ylabel))
+ylabel = np.reshape(ylabel, (T.shape[1]-2*m,T.shape[0]-2*m,1))
+plt.imshow(ylabel[:,:,0], cmap = 'Reds') #, vmin = 0, vmax = 1)
 plt.colorbar()
 
 plt.show()
