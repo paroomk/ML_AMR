@@ -244,14 +244,13 @@ print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)
 
 model = tf.keras.Sequential()
 model.add(tf.keras.Input(shape=(ly,lz,nvar)))
-#model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Conv2D(filters=32, kernel_size=(3,3), activation='relu', kernel_regularizer='l1'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-#model.add(tf.keras.layers.BatchNormalization())
+model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
 model.add(tf.keras.layers.Conv2D(filters=16, kernel_size=(3,3), activation='relu', kernel_regularizer='l1'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
-#model.add(tf.keras.layers.BatchNormalization())
+model.add(tf.keras.layers.BatchNormalization())
 model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
 #model.add(tf.keras.layers.Conv2D(filters=14, kernel_size=(3,3), activation='relu'))
 #model.add(tf.keras.layers.MaxPooling2D(pool_size=(2,2)))
@@ -275,7 +274,7 @@ model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsolute
 #Fit on training data
 ###############################################################################################
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=200, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_data=(x_val,x_vallabel))
 
 ###############################################################################################
 #Test 
@@ -284,8 +283,8 @@ history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=200, validation
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MAE: %.2f' % (score[1]))
-
-###########################################################################
+exit()
+##########################################################################
 #Test on different case
 ###########################################################################
 path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'

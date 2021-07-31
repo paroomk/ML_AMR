@@ -93,8 +93,8 @@ def extract_frm_pltfile(path1,path2, level, train, file):
     vx, vy, vz = np.gradient(data0['y_velocity'])
     wx, wy, wz = np.gradient(data0['z_velocity'])
     
-    T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
-    #T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,e,rho,pr),axis=-1)
+    #T = np.stack((T,u,v,w,e,rho,pr),axis=-1)
+    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,e,rho,pr),axis=-1)
 
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
     
@@ -109,8 +109,8 @@ def extract_frm_pltfile(path1,path2, level, train, file):
        indices = ds_index
        ds_index = ds_index[ds_index<Ti.size]
     else:
-       i, j = np.meshgrid(np.arange(Ti.shape[1]),np.arange(Ti.shape[0]))
-       indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[1]
+       i, j = np.meshgrid(np.arange(Ti.shape[0]),np.arange(Ti.shape[1]))
+       indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[0]
        indices = indices.reshape((indices.size))
        #indices = np.arange(0,Ti.size//nvar)
     
@@ -122,7 +122,7 @@ def extract_frm_pltfile(path1,path2, level, train, file):
 
     for p in indices:
         i = p%Ti.shape[0]
-        j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[1]
+        j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[0]
         k = p//(Ti.shape[0]*Ti.shape[1])
         #print(p)
         #print(i,j,k)
@@ -142,10 +142,10 @@ def extract_frm_downsampledfile(file):
     return ds_index
 
 #####################################################################################
-path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+path1 = path + 'plt0_85101' #'plt0_75346'
+path2 = path + 'plt2_85101' #'plt1_75346'
 
-path1 = path + 'plt0_75346'
-path2 = path + 'plt2_75346'
 
 level=0
 train = True
@@ -167,7 +167,7 @@ path2 = path + 'plt2_85101' #'plt1_75346'
 #Downsample
 #####################################################################################
 
-sf = 1.e+1
+sf = 1.e+0
 xlabel = xlabel*sf
 ylabel = ylabel*sf
 print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
@@ -263,7 +263,7 @@ model.compile(optimizer= opt, loss='mse', metrics=['accuracy'])
 ###############################################################################################
 #Fit on training data
 ###############################################################################################
-history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=150, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=200, validation_data=(x_val,x_vallabel))
 ###############################################################################################
 #Test 
 ###############################################################################################
@@ -337,10 +337,10 @@ print('MSE: %.2f' % (score[1]))
 ###########################################################################
 #Test on a different case
 ###########################################################################
-path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt0_85101'
-path2 = path + 'plt2_85101'
 
+path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+path1 = path + 'plt0_75346'
+path2 = path + 'plt2_75346'
 
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0, False, file)
 #xlabel = xlabel 
@@ -382,7 +382,7 @@ ax.set_ylim([min(ylabel),max(ylabel)])
 plt.show()
 
 plt.figure()
-plt.imshow(err[:,:,0], cmap = 'seismic') #, vmin = -1, vmax = 1)
+plt.imshow(err[:,:,0], cmap = 'Reds') #, vmin = -1, vmax = 1)
 plt.colorbar()
 plt.show()
 
