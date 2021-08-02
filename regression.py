@@ -81,24 +81,26 @@ def extract_frm_pltfile(path1, path2, level, train, file):
     ##############################################################
     #def process_data(X0,X0.mean(axis = 0), X0.std(axis = 0),X1):
     #for loop here:
-    u = (u-np.mean(u))/np.std(u) 
-    v = (v-np.mean(v))/np.std(v) 
-    w = (w-np.mean(w))/np.std(w) 
-    e = (e-np.mean(e))/np.std(e) 
-    rho = (rho-np.mean(rho))/np.std(rho) 
-    pr = (pr-np.mean(pr))/np.std(pr) 
+    u1 = (u1/np.mean(u))#/np.std(u1)
+    u = (u/np.mean(u))#/np.std(u) 
+    v = (v/np.mean(v))#/np.std(v) 
+    w = (w/np.mean(w))#/np.std(w) 
+    e = (e/np.mean(e))#/np.std(e) 
+    rho = (rho/np.mean(rho))#/np.std(rho) 
+    pr = (pr/np.mean(pr))#/np.std(pr) 
 
-    T = (T-np.mean(T))/np.std(T) 
-    T1 = (T1-np.mean(T1))/np.std(T1) 
-    u1 = (u1-np.mean(u1))/np.std(u1) 
+    Tmean = np.mean(T)
+
+    T = (T/Tmean)#/np.std(T) 
+    T1 = (T1/Tmean)#/np.std(T1)  
 
     diff = np.abs(u-u1)
     label = diff
 
     #Comment these lines for regression
     
-    #label[diff<1.e-3]  = 0
-    #label[diff>=1.e-3] = 1
+    label[diff<1.e-2]  = 0
+    label[diff>=1.e-2] = 1
 
     ratio = np.sum(label)/np.size(label)
     print(ratio)
@@ -117,7 +119,7 @@ def extract_frm_pltfile(path1, path2, level, train, file):
     T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
-    l=3
+    l=1
      #size of box
     m = l//2
 
@@ -130,6 +132,7 @@ def extract_frm_pltfile(path1, path2, level, train, file):
 
     if (train):
        ds_index = extract_frm_downsampledfile(file)
+       ds_index = ds_index[ds_index<(Ti.size//nvar)]
        indices = ds_index
     else:
        i, j = np.meshgrid(np.arange(Ti.shape[0]),np.arange(Ti.shape[1]))
@@ -314,9 +317,9 @@ model.compile(
           metrics   = ['accuracy'],
           optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001))
 # fit 
-model.fit(x_train, x_trainlabel, batch_size=32, epochs=150, validation_data=(x_val,x_vallabel))
+model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_data=(x_val,x_vallabel))
 
-model.save('fcnn', save_format='tf')
+#model.save('fcnn', save_format='tf')
 #############################################################################
 #Test 
 #############################################################################
@@ -328,13 +331,13 @@ print('MSE: %.2f' % (score[1]))
 ###########################################################################
 #Test on different case
 ###########################################################################
-#path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-#path1 = path + 'plt1_75346'
-#path2 = path + 'plt2_75346'
+path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+path1 = path + 'plt0_75346'
+path2 = path + 'plt1_75346'
 
-path = '/projects/hpacf/pmadathi/PeleC/Exec/RegTests/pelecjetcase/'
-path1 = path + 'plt85092'
-path2 = path + 'plt185092'
+#path = '/projects/hpacf/pmadathi/PeleC/Exec/RegTests/pelecjetcase/'
+#path1 = path + 'plt85092'
+#path2 = path + 'plt185092'
 
 y, ylabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0, False, file)
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
@@ -345,14 +348,12 @@ for i in range(0, nvar):
 
 #ylabel = (ylabel - label_mean)/label_std
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
-#exit()
+exit()
 score = model.evaluate(y, ylabel)
 print('Loss: %.2f' % (score[0]))
 print('Accuracy: %.2f' % (score[1]))
 
-print(y[14892,:])
 y_predict = model.predict(y)
-print(y_predict[14892])
 
 ratio = np.sum(np.round(y_predict))/np.size(y_predict)
 print(ratio)
@@ -363,7 +364,7 @@ print(ratio)
 print(y_predict.shape, ylabel.shape)
 ylabel = ylabel/sf
 y_predict = y_predict/sf
-err = np.abs((y_predict)-ylabel)
+err = (np.round(y_predict)-ylabel)
 print(np.max(err))
 ylabel = np.abs(ylabel)
 y_predict = np.abs(y_predict)
@@ -386,7 +387,7 @@ err = np.reshape(err, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 #plt.show()
 
 plt.figure()
-plt.imshow(err[:,:,0], cmap = 'Reds') #, vmin = -1, vmax = 1)
+plt.imshow(err[:,:,0], cmap = 'seismic', vmin = -1, vmax = 1)
 plt.colorbar()
 plt.show()
 
@@ -394,14 +395,14 @@ plt.show()
 y_predict = np.reshape(y_predict, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 
 plt.figure()
-plt.imshow(y_predict[:,:,0], cmap ='Reds')#, vmin = 0, vmax = 1)
+plt.imshow(y_predict[:,:,0], cmap ='Reds', vmin = 0, vmax = 1)
 plt.colorbar()
 plt.show()
 
 #ylabel = np.reshape(ylabel, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 ylabel = np.reshape(ylabel, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 plt.figure()
-plt.imshow(ylabel[:,:,0], cmap = 'Reds')#, vmin = 0, vmax = 1)
+plt.imshow(ylabel[:,:,0], cmap = 'Reds', vmin = 0, vmax = 1)
 plt.colorbar()
 
 plt.show()

@@ -52,7 +52,7 @@ def extract_frm_pltfile(path1,path2, level, train, file):
     #plt.show()
     
     #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
-    nvar =  7
+    nvar =  15
 
     Tmean = np.mean(T)
 
@@ -83,8 +83,8 @@ def extract_frm_pltfile(path1,path2, level, train, file):
 
     #Comment these lines for regression
     
-    #label[diff<1.e-2]  = 0
-    #label[diff>=1.e-2] = 1
+    label[diff<1.e-2]  = 0
+    label[diff>=1.e-2] = 1
 
     print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
 
@@ -106,8 +106,8 @@ def extract_frm_pltfile(path1,path2, level, train, file):
 
     if (train):
        ds_index = extract_frm_downsampledfile(file)
+       ds_index = ds_index[ds_index<(Ti.size//nvar)]
        indices = ds_index
-       ds_index = ds_index[ds_index<Ti.size]
     else:
        i, j = np.meshgrid(np.arange(Ti.shape[0]),np.arange(Ti.shape[1]))
        indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[0]
@@ -149,7 +149,7 @@ path2 = path + 'plt2_85101' #'plt1_75346'
 
 level=0
 train = True
-file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_350_01/downSampledData_10000.npz'
+file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level, train, file)
 y = x
 ylabel = xlabel
@@ -251,7 +251,7 @@ model.add(tf.keras.layers.Dense(8, kernel_regularizer='l1', activation='relu'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.Dropout(0.11))
 #model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation='relu'))#, activation=tf.keras.activations.softplus))
+model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation='sigmoid'))#, activation=tf.keras.activations.softplus))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 
 model.summary()
