@@ -93,17 +93,17 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
     print(n)
     for i in range(0,n):
         x[:,:,:,i] = (x[:,:,:,i]/x_mean[i])#/x_std[i] 
-        x1[:,:,:,i] = (x1[:,:,:,i]/x1_mean[i])#/x1_std[i] 
+        x1[:,:,:,i] = (x1[:,:,:,i]/x_mean[i])#/x1_std[i] 
 
     label = np.abs(x1-x)
 
     #Comment these lines for regression
 
-    #label[label<1.e-4]  = 0
-    #label[label>=1.e-4] = 1
+    #label[label<1.e-2]  = 0
+    #label[label>=1.e-2] = 1
 
 
-    nvar =  7
+    nvar =  15
 
     Tx, Ty, Tz = np.gradient(x[:,:,:,0])
     ux, uy, uz = np.gradient(x[:,:,:,1])
@@ -118,8 +118,8 @@ def process_data(x,x_mean,x_std,x1,x1_mean,x1_std):
     e   = x[:,:,:,5]
     pr  = x[:,:,:,6]
 
-    #x = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
-    x = np.stack((T,u,v,w,rho,e,pr), axis = -1)
+    x = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
+    #x = np.stack((T,u,v,w,rho,e,pr), axis = -1)
     print(x.shape,label.shape)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
@@ -183,7 +183,7 @@ lz = x.shape[2]
 
 xlabel = xlabel.reshape(xlabel.shape[0],ly*lz)
 
-sf = 1.e+2
+sf = 1.e+0
 xlabel = xlabel*sf
 
 y = x
@@ -274,7 +274,7 @@ model.compile(optimizer= opt, loss='mse', metrics=[tf.keras.metrics.MeanAbsolute
 #Fit on training data
 ###############################################################################################
 
-history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=100, validation_data=(x_val,x_vallabel))
 
 ###############################################################################################
 #Test 
@@ -283,7 +283,14 @@ history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))
 print('MAE: %.2f' % (score[1]))
-exit()
+m=40
+pred = model.predict(y[m:m+1,:,:])
+err = np.abs(np.round(pred)-ylabel[m,:])
+err = err**2
+ratio = np.sum(err)/err.size
+print(ratio)
+
+#exit()
 ##########################################################################
 #Test on different case
 ###########################################################################
@@ -325,7 +332,20 @@ for i in range(0, nvar):
 #ax.set_xlim([min(ylabel),max(ylabel)])
 #ax.set_ylim([min(ylabel),max(ylabel)])
 #plt.show()
-m = 40
+
+pred = model.predict(y[m:m+1,:,:])
+err = np.abs(np.round(pred)-ylabel[m,:])
+err = err**2
+ratio = np.sum(err)/err.size
+print(ratio)
+exit()
+
+score = model.evaluate(y[m:m+1,:,:], ylabel[m,:])
+print('Loss: %.2f' % (score[0]))
+print('MAE: %.2f' % (score[1]))
+
+
+
 y_predict = model.predict(y[m:m+1,:,:,:])
 ylabel = ylabel/sf
 y_predict = y_predict/sf
