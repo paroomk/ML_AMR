@@ -13,11 +13,11 @@ from tensorflow import keras
 
 def write_frm_pltfile(path):
 
-    amrex_plt_file0 = path + 'plt0_85101'
+    amrex_plt_file0 = path + 'plt1_85101'
     ds0 = yt.load(amrex_plt_file0)
     ds0.print_stats()
 
-    amrex_plt_file1 = path + 'plt1_85101'
+    amrex_plt_file1 = path + 'plt2_85101'
     ds1 = yt.load(amrex_plt_file1)
     ds1.print_stats()
 
@@ -119,7 +119,7 @@ def write_frm_pltfile(path):
     xlabel = xlabel.reshape((xlabel.shape[0],1))
 
     x = np.append(x,xlabel,axis=1)
-    np.save('jetdata85101',x)
+    np.save('jetdata85101_12',x)
 
     return
 def extract_frm_downsampledfile(file):
