@@ -1,4 +1,4 @@
-#Script to identify cells based on error threshold + ML training to identify cells ith error above threshold
+#Script for Classification/Regression using a Fully Connected Network
 
 from socket import MSG_EOR
 import numpy as np
@@ -12,6 +12,8 @@ import sherpa
 #os.putenv('DISPLAY', ':0.0')
 import tensorflow as tf
 from tensorflow import keras
+from sklearn.inspection import permutation_importance
+from sklearn.model_selection import KFold
 
 
 def extract_frm_pltfile(path1, path2, level, train, file):
@@ -48,23 +50,17 @@ def extract_frm_pltfile(path1, path2, level, train, file):
     # with interpolation
     data0 = ds0.smoothed_covering_grid(min_level, left_edge=low0, dims=dims0, num_ghost_zones=1)
     data1 = ds1.smoothed_covering_grid(min_level, left_edge=low1, dims=dims1, num_ghost_zones=1)
-
-    print(data0['Temp'].shape)
-    print(data1['Temp'].shape)
-    T = np.array(data0['Temp'])
-    T1 = np.array(data1['Temp']) 
-    u1 = np.array(data1['x_velocity']) 
-    
-    print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
-
-    #print(diff[:,:,47])
-
+ 
     #plt.figure()
     #plt.imshow(diff[:,:,50])
     #plt.show()
 
-    #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
+    #Create appropriate training data (3x3 grid of variables centered around the point of interest)
 
+    T1 = np.array(data1['Temp']) 
+    u1 = np.array(data1['x_velocity'])
+
+    T = np.array(data0['Temp'])
     u = np.array(data0['x_velocity'])
     v = np.array(data0['y_velocity'])
     w = np.array(data0['z_velocity'])
@@ -72,15 +68,13 @@ def extract_frm_pltfile(path1, path2, level, train, file):
     rho = np.array(data0['density'])
     pr = np.array(data0['pressure'])
     
-    print(np.std(T),np.std(u),np.std(v),np.std(w),np.std(rho),np.std(e),np.std(pr))
-    print(np.mean(rho),np.mean(e),np.mean(pr))
-    #exit()
-    #split here
-    X0 = T
-    # return X0, X1
+    #print(np.std(T),np.std(u),np.std(v),np.std(w),np.std(rho),np.std(e),np.std(pr))
+    #print(np.mean(rho),np.mean(e),np.mean(pr))
+
     ##############################################################
-    #def process_data(X0,X0.mean(axis = 0), X0.std(axis = 0),X1):
-    #for loop here:
+
+    #Non-dimensionalization wrt mean
+
     u1 = (u1/np.mean(u))#/np.std(u1)
     u = (u/np.mean(u))#/np.std(u) 
     v = (v/np.mean(v))#/np.std(v) 
@@ -97,31 +91,29 @@ def extract_frm_pltfile(path1, path2, level, train, file):
     diff = np.abs(u-u1)
     label = diff
 
-    #Comment these lines for regression
+    #Comment these lines for regression (and change the final activaton function to sigmoid)
     
     label[diff<1.e-2]  = 0
     label[diff>=1.e-2] = 1
 
-    ratio = np.sum(label)/np.size(label)
+    ratio = np.sum(label)/np.size(label) 
     print(ratio)
-    #exit()
 
     print('Max error =',np.max(np.abs(T-T1)), 'Min error =', np.min(np.abs(T-T1)))
 
-    nvar =  15
+    nvar =  12 #number of flow variables used
 
     Tx, Ty, Tz = np.gradient(np.array(data0['Temp']))
     ux, uy, uz = np.gradient(np.array(data0['x_velocity']))
     vx, vy, vz = np.gradient(np.array(data0['y_velocity']))
     wx, wy, wz = np.gradient(np.array(data0['z_velocity']))
-    
+
     #T = np.stack((T,u,v,w,rho,e,pr),axis=-1)
-    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz,rho,e,pr),axis=-1)
+    T = np.stack((Tx,Ty,Tz,ux,uy,uz,vx,vy,vz,wx,wy,wz),axis=-1)
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
 
-    l=1
-     #size of box
-    m = l//2
+    l=1   #size of box
+    m = l//2 #number of neighbors
 
     if m==0:
         Ti = T
@@ -130,24 +122,27 @@ def extract_frm_pltfile(path1, path2, level, train, file):
 
     print(Ti.shape)
 
+    nslice = 40 #adjust for requisite slice
+
     if (train):
        ds_index = extract_frm_downsampledfile(file)
-       ds_index = ds_index[ds_index<(Ti.size//nvar)]
+       ds_index = ds_index[ds_index<(Ti.size//nvar)] #removes any index lost at the boundary
        indices = ds_index
-    else:
+    else: #for testing picks slice (k = nslice)
        i, j = np.meshgrid(np.arange(Ti.shape[0]),np.arange(Ti.shape[1]))
-       indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[0]
+       indices = nslice*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[0]
        indices = indices.reshape((indices.size))
        #indices = np.arange(0,Ti.size//nvar)
        
     s = (indices.size,l,l,l,nvar)
     x = np.zeros(s)
-    print(x.shape)
+    #print(x.shape)
     xlabel = np.zeros(indices.size)
     n=0
 
     for p in indices:
-        i = p%Ti.shape[0]
+        #map flattened index p to i,j,k
+        i = p%Ti.shape[0]          
         j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[0]
         k = p//(Ti.shape[0]*Ti.shape[1])
         #print(p)
@@ -177,30 +172,38 @@ def extract_frm_downsampledfile(file):
 path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
 path1 = path + 'plt0_85101'
 path2 = path + 'plt1_85101'
-#path = '/projects/hpacf/pmadathi/PeleC/Exec/RegTests/pelecjetcase/'
-#path1 = path + 'plt85092' #'plt0_75346'
-#path2 = path + 'plt185092' #'plt1_75346'
 
 level = 0
 train = True
 file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_01/downSampledData_10000.npz'
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level, train, file)
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-##############################################################################
-#Downsampled data
-##############################################################################
 
-sf = 1.e+0
-xlabel = xlabel*sf
+#########################################################################################
+#Add another level to training if required
 
-print('Max error (02) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+#path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+#path1 = path + 'plt1_85101'
+#path2 = path + 'plt2_85101'
+#level = 1
+#file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
+#x1, xlabel1, nvar, l, T = extract_frm_pltfile(path1, path2, level, train, file)
+#print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 
-xx = x #np.concatenate((x,x1),axis=0)
+
+xx = x #np.concatenate((x,x1),axis=0) 
 xxlabel = xlabel #np.concatenate((xlabel,xlabel1),axis=0)
+
+##############################################################################
+#Shuffle for permutation feature importance
+#np.random.shuffle(xx[:,0])
+##############################################################################
+
 ##############################################################################
 #Creating validation data set
 ##############################################################################
 
+#np.random.seed(0) #fixes train, test set 
 val_index = np.random.choice(np.arange(0,xx.shape[0]),xx.shape[0]//5,replace='False')
 
 x_val = xx[val_index, :]
@@ -219,6 +222,10 @@ x_testlabel = x_trainlabel[test_index]
 
 x_train = np.delete(x_train, test_index, 0)
 x_trainlabel = np.delete(x_trainlabel, test_index, 0)
+
+###############################################################################
+#Feature/Label normalization
+###############################################################################
 train_mean = np.zeros(nvar)
 train_std = np.zeros(nvar)
 
@@ -232,14 +239,14 @@ for i in range(0, nvar):
 
 label_mean = np.mean(x_trainlabel)
 label_std  = np.std(x_trainlabel)
-print(train_mean)
-print(train_std)
-#exit()
+
+#Label normalization
 #x_trainlabel = (x_trainlabel - label_mean)/label_std
 #x_testlabel = (x_testlabel - label_mean)/label_std
 #x_vallabel = (x_vallabel - label_mean)/label_std
 
-print('Max error =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
+print('Max error (training) =',np.max(np.abs(x_trainlabel)), 'Min error =', np.min(np.abs(x_trainlabel)))
+
 #############################################################################
 #Sherpa set up
 #############################################################################
@@ -311,6 +318,30 @@ class fcnn(tf.keras.Model):
     x = self.drop(x)
     return self.dense3(x)
 
+#############################################################################################
+#Cross validation
+#############################################################################################
+#n_split=10
+#mse = np.zeros(n_split)
+#i = 0
+#for train_index,test_index in KFold(n_split).split(x):
+#  x_train,x_test=x[train_index],x[test_index]
+#  y_train,y_test=xlabel[train_index],xlabel[test_index]
+# 
+#  model=fcnn()
+#  model.compile(
+#          loss      = tf.keras.losses.MeanSquaredError(),
+#          metrics   = ['accuracy'],
+#          optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001))
+#  model.fit(x_train, y_train,epochs=50)
+# 
+#  score = model.evaluate(x_test,y_test)
+#  mse[i] = score[0]
+#  i = i+1
+#
+#print(np.mean(mse),np.std(mse))
+#exit()
+
 model = fcnn()
 model.compile(
           loss      = tf.keras.losses.MeanSquaredError(),
@@ -319,52 +350,61 @@ model.compile(
 # fit 
 model.fit(x_train, x_trainlabel, batch_size=32, epochs=50, validation_data=(x_val,x_vallabel))
 
-#model.save('fcnn', save_format='tf')
+model.save('fcnn', save_format='tf')
+#exit()
 #############################################################################
 #Test 
 #############################################################################
 
-
 score = model.evaluate(x_test, x_testlabel)
 print('Loss: %.2f' % (score[0]))#
 print('MSE: %.2f' % (score[1]))
+
 ###########################################################################
 #Test on different case
 ###########################################################################
-path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
-path1 = path + 'plt0_75346'
-path2 = path + 'plt1_75346'
+#path = '/projects/hpacf/pmadathi/jetcase/350_ambient/'
+#path1 = path + 'plt0_75346'
+#path2 = path + 'plt1_75346'
 
-#path = '/projects/hpacf/pmadathi/PeleC/Exec/RegTests/pelecjetcase/'
-#path1 = path + 'plt85092'
-#path2 = path + 'plt185092'
+path = '/projects/hpacf/pmadathi/PeleC/Exec/RegTests/pelecjetcase/'
+path1 = path + 'plt0_85092'
+path2 = path + 'plt1_85092'
 
 y, ylabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0, False, file)
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-ylabel = ylabel*sf
 
 for i in range(0, nvar):
-    y[:,i] = (y[:,i] - train_mean[i])/train_std[i]
+    y[:,i] = (y[:,i] - train_mean[i])/train_std[i]  #Feature Normalization
 
-#ylabel = (ylabel - label_mean)/label_std
+#ylabel = (ylabel - label_mean)/label_std #Label normalization
+
+m =l//2
+y_predict = model.predict(y)
+#print(y_predict)
+
 print('Max error =',np.max(np.abs(ylabel)), 'Min error =', np.min(np.abs(ylabel)))
-exit()
+#exit()
 score = model.evaluate(y, ylabel)
 print('Loss: %.2f' % (score[0]))
 print('Accuracy: %.2f' % (score[1]))
 
-y_predict = model.predict(y)
-
-ratio = np.sum(np.round(y_predict))/np.size(y_predict)
+ratio = np.sum(np.round(y_predict))/np.size(y_predict) #predicted ratio of tagged cells on the test slice
 print(ratio)
-ratio = np.size(ylabel[ylabel>0.9])/np.size(ylabel)
+ratio = np.size(ylabel[ylabel>0.9])/np.size(ylabel) #actual ratio of tagged cells on the test slice
 print(ratio)
-#exit()
 
-print(y_predict.shape, ylabel.shape)
-ylabel = ylabel/sf
-y_predict = y_predict/sf
-err = (np.round(y_predict)-ylabel)
+###############################################################################################
+#Permuation feature importance
+###############################################################################################
+r = permutation_importance(model, y, ylabel, scoring = "neg_mean_squared_error", n_repeats=60, random_state=0)
+print(r)
+exit()
+
+#print(y_predict.shape, ylabel.shape)
+
+#err = (np.round(y_predict)-ylabel) #classification error
+err = np.abs((y_predict)-ylabel)    #regression error
 print(np.max(err))
 ylabel = np.abs(ylabel)
 y_predict = np.abs(y_predict)
@@ -372,22 +412,22 @@ y_predict = np.abs(y_predict)
 #Plotting
 ###########################################################################
 #print(err.shape, ylabel.shape)
-m =l//2
+
 #err = np.reshape(err, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 err = np.reshape(err, (T.shape[1]-2*m,T.shape[0]-2*m,1))
-#ax =plt.gca()
-#ax.set_yscale('log')
-#ax.set_xscale('log')
-#ax.scatter(ylabel, y_predict)
-#plt.xlabel('Actual error')
-#plt.ylabel('Predicted error')
-#plt.title('Case: 314 ambient')
-#ax.set_xlim([min(ylabel),max(ylabel)])
-#ax.set_ylim([min(ylabel),max(ylabel)])
-#plt.show()
+ax =plt.gca()
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.scatter(ylabel, y_predict)
+plt.xlabel('Actual error')
+plt.ylabel('Predicted error')
+plt.title('Case: 314 ambient')
+ax.set_xlim([min(ylabel),max(ylabel)])
+ax.set_ylim([min(ylabel),max(ylabel)])
+plt.show()
 
 plt.figure()
-plt.imshow(err[:,:,0], cmap = 'seismic', vmin = -1, vmax = 1)
+plt.imshow(err[:,:,0], cmap = 'Reds')#, vmin = -1, vmax = 1)
 plt.colorbar()
 plt.show()
 
@@ -395,14 +435,14 @@ plt.show()
 y_predict = np.reshape(y_predict, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 
 plt.figure()
-plt.imshow(y_predict[:,:,0], cmap ='Reds', vmin = 0, vmax = 1)
+plt.imshow(y_predict[:,:,0], cmap ='Reds')#, vmin = 0, vmax = 1)
 plt.colorbar()
 plt.show()
 
 #ylabel = np.reshape(ylabel, (T.shape[0]-2*m,T.shape[1]-2*m,T.shape[2]-2*m))
 ylabel = np.reshape(ylabel, (T.shape[1]-2*m,T.shape[0]-2*m,1))
 plt.figure()
-plt.imshow(ylabel[:,:,0], cmap = 'Reds', vmin = 0, vmax = 1)
+plt.imshow(ylabel[:,:,0], cmap = 'Reds')#, vmin = 0, vmax = 1)
 plt.colorbar()
 
 plt.show()
