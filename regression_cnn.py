@@ -1,4 +1,4 @@
-#Script to identify cells based on error threshold + ML training to identify cells ith error above threshold
+#Script for Regression/Classification using CNN (localized)
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -51,40 +51,41 @@ def extract_frm_pltfile(path1,path2, level, train, file):
     #plt.imshow(diff[:,:,50])
     #plt.show()
     
-    #Create appropriate training data (3x3 grid of Temp values centered around the point of interest)
+    #Create appropriate training data (3x3 grid of flow variables centered around the point of interest)
     nvar =  15
-
-    Tmean = np.mean(T)
-
-    T = (T/Tmean)#/np.std(T) 
-    T1 = (T1/Tmean)#/np.std(T) 
-
+    
     u = np.array(data0['x_velocity'])
     u1 = np.array(data1['x_velocity'])
-
-    umean = np.mean(u)
-
     v = np.array(data0['y_velocity'])
     w = np.array(data0['z_velocity'])
     e = np.array(data0['eint_e'])
     rho = np.array(data0['density'])
     pr = np.array(data0['pressure'])
 
+    umean = np.mean(u)
+    Tmean = np.mean(T)
+
+    #Non-dimensionalization wrt mean
+    
+    T1 = (T1/Tmean)#/np.std(T) 
     u1 = (u1/np.mean(u))#/np.std(u)
+
+    T = (T/Tmean)#/np.std(T) 
     u = (u/np.mean(u))#/np.std(u) 
     v = (v/np.mean(v))#/np.std(v) 
     w = (w/np.mean(w))#/np.std(w) 
     e = (e/np.mean(e))#/np.std(e) 
     rho = (rho/np.mean(rho))#/np.std(rho) 
     pr = (pr/np.mean(pr))#/np.std(pr) 
-    #
+    
+
     diff = np.abs(u-u1)
     label = diff 
 
-    #Comment these lines for regression
+    #Comment these lines for regression + change final activation function to sigmoid (might need to change metrics etc as well)
     
-    label[diff<1.e-2]  = 0
-    label[diff>=1.e-2] = 1
+    #label[diff<1.e-2]  = 0
+    #label[diff>=1.e-2] = 1
 
     print('Max error =',np.max(np.abs(label)), 'Min error =', np.min(np.abs(label)))
 
@@ -99,20 +100,22 @@ def extract_frm_pltfile(path1,path2, level, train, file):
     #T = np.reshape(T,(T.shape[0], T.shape[1], T.shape[2], 1))
     
     l=5 #size of box
-    m = l//2
+    m = l//2 #number of neighbors
     
     Ti = T[m:-m,m:-m,m:-m,:] #Exclude boundary points
     print(Ti.shape)
+
+    nslice = 40 #Slice k=40
 
     if (train):
        ds_index = extract_frm_downsampledfile(file)
        ds_index = ds_index[ds_index<(Ti.size//nvar)]
        indices = ds_index
-    else:
+    else:  #for testing picks slice (k = nslice)
        i, j = np.meshgrid(np.arange(Ti.shape[0]),np.arange(Ti.shape[1]))
-       indices = 40*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[0]
+       indices = nslice*Ti.shape[0]*Ti.shape[1] + i + j*Ti.shape[0]
        indices = indices.reshape((indices.size))
-       #indices = np.arange(0,Ti.size//nvar)
+       #indices = np.arange(0,Ti.size//nvar) 
     
     s = (indices.size,l,l,l,nvar)
     x = np.zeros(s)
@@ -121,6 +124,7 @@ def extract_frm_pltfile(path1,path2, level, train, file):
     n=0
 
     for p in indices:
+        #map flattened index p to i,j,k
         i = p%Ti.shape[0]
         j = (p%(Ti.shape[0]*Ti.shape[1]))//Ti.shape[0]
         k = p//(Ti.shape[0]*Ti.shape[1])
@@ -134,6 +138,7 @@ def extract_frm_pltfile(path1,path2, level, train, file):
     print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
     
     return x, xlabel, nvar, l, T
+
 def extract_frm_downsampledfile(file):
     ds = np.load(file)
     print(ds.files)
@@ -154,36 +159,26 @@ x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, level, train, file)
 y = x
 ylabel = xlabel
 
-path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
-path1 = path + 'plt1_85101' #'plt0_75346'
-path2 = path + 'plt2_85101' #'plt1_75346'
+print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
+
+#######################################################################################
+#Add another level for training if required
+#######################################################################################
+
+#path = '/projects/hpacf/pmadathi/jetcase/314_ambient/'
+#path1 = path + 'plt1_85101' #'plt0_75346'
+#path2 = path + 'plt2_85101' #'plt1_75346'
 
 #level=1
 #x1, xlabel1, nvar, l, T1 = extract_frm_pltfile(path1, path2, level)
 #print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 #y1 = x1
 #ylabel1 = xlabel1
-#####################################################################################
-#Downsample
-#####################################################################################
-
-sf = 1.e+0
-xlabel = xlabel*sf
-ylabel = ylabel*sf
-print('Max error (01) =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
-
-#file = '/home/pmadathi/PhaseSpaceSampling/downSampledData_12/downSampledData_10000.npz'
-#ds_index = extract_frm_downsampledfile(file)
-#ds_index = ds_index[ds_index<x.shape[0]]
-#x1= x1[ds_index,:,:,:]
-#xlabel1 = xlabel1[ds_index]*sf
-#ylabel1 = ylabel1*sf
 
 #print('Max error (12) =',np.max(np.abs(xlabel1)), 'Min error =', np.min(np.abs(xlabel1)))
 
 xx = x #np.concatenate((x,x1),axis=0)
 xxlabel = xlabel #np.concatenate((xlabel,xlabel1),axis=0)
-
 
 ##############################################################################
 #Creating validation data set
@@ -208,7 +203,7 @@ x_trainlabel = np.delete(x_trainlabel, test_index, 0)
 
 print(x_train.shape,x_trainlabel.shape)
 #############################################################################
-#Normalization
+#Normalization (Feature/Label)
 #############################################################################
 
 train_mean = np.mean(x_train)
@@ -218,15 +213,17 @@ x_train = (x_train - train_mean)/train_std
 x_test  = (x_test- train_mean)/train_std
 x_val   = (x_val - train_mean)/train_std
 y       = (y - train_mean)/train_std
+
+#Label normalization
     
-l_mean = np.mean(x_trainlabel)
-l_std  = np.std(x_trainlabel)
-
-l_min = np.min(x_trainlabel)
-l_max  = np.max(x_trainlabel)
-
-print(l_std)
-
+#l_mean = np.mean(x_trainlabel)
+#l_std  = np.std(x_trainlabel)
+#
+#l_min = np.min(x_trainlabel)
+#l_max  = np.max(x_trainlabel)
+#
+#print(l_std)
+#
 #x_trainlabel = (x_trainlabel)/l_std
 #x_testlabel = (x_testlabel)/l_std
 #x_vallabel = (x_vallabel)/l_std
@@ -251,7 +248,7 @@ model.add(tf.keras.layers.Dense(8, kernel_regularizer='l1', activation='relu'))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 model.add(tf.keras.layers.Dropout(0.11))
 #model.add(tf.keras.layers.Dense(4, activation='relu', kernel_regularizer='l1'))
-model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation='sigmoid'))#, activation=tf.keras.activations.softplus))
+model.add(tf.keras.layers.Dense(1, kernel_regularizer='l1', activation='relu'))#, activation=tf.keras.activations.softplus))
 #model.add(tf.keras.layers.LeakyReLU(alpha=0.05))
 
 model.summary()
@@ -259,11 +256,11 @@ model.summary()
 opt = keras.optimizers.Adam(learning_rate=0.0001)
 #reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2,
 #                              patience=5, min_lr=0.00005)
-model.compile(optimizer= opt, loss='mse', metrics=['accuracy'])
+model.compile(optimizer= opt, loss='mse', metrics=['mae'])
 ###############################################################################################
 #Fit on training data
 ###############################################################################################
-history = model.fit(x_train, x_trainlabel, batch_size=128, epochs=200, validation_data=(x_val,x_vallabel))
+history = model.fit(x_train, x_trainlabel, batch_size=32, epochs=200, validation_data=(x_val,x_vallabel))
 ###############################################################################################
 #Test 
 ###############################################################################################
@@ -343,20 +340,18 @@ path1 = path + 'plt0_75346'
 path2 = path + 'plt2_75346'
 
 x, xlabel, nvar, l, T = extract_frm_pltfile(path1, path2, 0, False, file)
-#xlabel = xlabel 
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 y = x
-xlabel = xlabel*sf
+
 ylabel = xlabel
 print('Max error =',np.max(np.abs(xlabel)), 'Min error =', np.min(np.abs(xlabel)))
 
-y   = (y - train_mean)/train_std
-#ylabel = (ylabel)/l_std
+y   = (y - train_mean)/train_std     #Feature normalization
+#ylabel = (ylabel)/l_std             #Label normalization
 
 y_predict = model.predict(y)
 print(y_predict.shape, ylabel.shape)
-ylabel = ylabel/sf
-y_predict = y_predict/sf
+
 err = np.abs(y_predict[:,0]-ylabel)
 print(np.max(err))
 
